@@ -39,9 +39,36 @@ def get_device_name(mac, custom_names=None):
     return custom_names.get(mac_normalized, None)
 
 def parse_arp_output():
-    """Parse `arp -a` output to extract device info."""
-    result = subprocess.run(["arp", "-a"], capture_output=True, text=True)
-    lines = result.stdout.strip().split("\n")
+    """Parse `arp -a` output to extract device info with background thread to avoid timeout."""
+    import threading
+    
+    result_container = {"output": None, "error": None}
+    
+    def run_arp():
+        try:
+            result = subprocess.run(["arp", "-a"], capture_output=True, text=True, timeout=2)
+            result_container["output"] = result.stdout
+        except subprocess.TimeoutExpired:
+            result_container["error"] = "timeout"
+        except Exception as e:
+            result_container["error"] = str(e)
+    
+    thread = threading.Thread(target=run_arp)
+    thread.start()
+    thread.join(timeout=2.5)
+    
+    if result_container["error"]:
+        print(f"WARNING: arp -a failed ({result_container['error']}), using cached data")
+        # Return existing devices as-is (don't mark offline if scan fails)
+        existing = load_devices()
+        return existing
+    
+    if not result_container["output"]:
+        print("WARNING: arp -a returned no output")
+        existing = load_devices()
+        return existing
+    
+    lines = result_container["output"].strip().split("\n")
     
     devices = []
     pattern = r'\(([\d.]+)\) at ([a-f0-9:]+)'
@@ -68,7 +95,6 @@ def parse_arp_output():
                 try:
                     hostname = socket.gethostbyaddr(ip)[0]
                 except (socket.herror, socket.gaierror):
-                    # Reverse DNS failed, leave hostname empty
                     pass
             
             device_name = get_device_name(mac)
