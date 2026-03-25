@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🗑️ Gmail Spam Folder</title>
+    <style>
+        body { font-family: Arial; background: #1a1a2e; color: #eee; padding: 20px; }
+        .email { background: #16213e; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .subject { font-size: 1.1em; color: #00d4ff; }
+        .meta { color: #888; margin-top: 5px; }
+        .risk { display: inline-block; padding: 3px 8px; border-radius: 4px; margin-left: 10px; }
+        .LOW { background: #27ae60; }
+        .MEDIUM { background: #f39c12; }
+        .HIGH { background: #e74c3c; }
+        .CRITICAL { background: #c0392b; }
+    </style>
+</head>
+<body>
+    <h1>🗑️ Your Gmail Spam Folder</h1>
+    <div id="content">Loading...</div>
+    
+    <script>
+        fetch('/api/email_scans')
+            .then(r => r.json())
+            .then(data => {
+                const spam = data.results?.filter(e => e.folder === '[Gmail]/Spam') || [];
+                const html = `
+                    <p>Total: ${spam.length} emails</p>
+                    ${spam.map((e, i) => `
+                        <div class="email">
+                            <div class="subject">${i + 1}. ${e.subject || 'No Subject'}</div>
+                            <div class="meta">
+                                From: ${e.sender || 'Unknown'} | 
+                                Risk: <span class="risk ${e.risk_level}">${e.risk_level}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
+                document.getElementById('content').innerHTML = html;
+            })
+            .catch(err => {
+                document.getElementById('content').innerHTML = 'Error loading data: ' + err;
+            });
+    </script>
+</body>
+</html>

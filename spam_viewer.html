@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🗑️ Spam Emails</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; 
+            background: #1a1a2e; 
+            color: #eee; 
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: #16213e;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .total {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .email { 
+            background: #1a1a2e; 
+            padding: 20px; 
+            margin: 15px 0; 
+            border-radius: 8px;
+            border-left: 4px solid #888;
+        }
+        .email.LOW { border-left-color: #27ae60; }
+        .email.MEDIUM { border-left-color: #f39c12; }
+        .email.HIGH { border-left-color: #e74c3c; }
+        .email.CRITICAL { border-left-color: #c0392b; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .subject { 
+            color: #00d4ff;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        .meta { 
+            color: #888;
+            font-size: 0.9em;
+            margin-bottom: 10px;
+        }
+        .body-preview {
+            background: #0f0f1a;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            color: #aaa;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .risk-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        .risk-badge.LOW { background: #27ae60; }
+        .risk-badge.MEDIUM { background: #f39c12; color: #000; }
+        .risk-badge.HIGH { background: #e74c3c; }
+        .risk-badge.CRITICAL { background: #c0392b; }
+        .empty {
+            text-align: center;
+            color: #888;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ YOUR GMAIL SPAM FOLDER</h1>
+        <p class="total" id="total">Loading...</p>
+        <div id="output"></div>
+    </div>
+    <script>
+        fetch('/api/email_scans')
+            .then(r => r.json())
+            .then(data => {
+                const spam = data.results?.filter(e => e.folder === '[Gmail]/Spam') || [];
+                
+                document.getElementById('total').textContent = `Total: ${spam.length} emails`;
+                
+                if (spam.length === 0) {
+                    document.getElementById('output').innerHTML = '<div class="empty">No emails in Spam folder</div>';
+                    return;
+                }
+                
+                document.getElementById('output').innerHTML = spam.map((e,i) => `
+                    <div class="email ${e.risk_level || 'LOW'}">
+                        <div class="header">
+                            <div class="subject">${i+1}. ${e.subject || 'No Subject'}</div>
+                            <span class="risk-badge ${e.risk_level || 'LOW'}">${e.risk_level || 'LOW'}</span>
+                        </div>
+                        <div class="meta">
+                            <strong>From:</strong> ${e.sender || 'Unknown'} |
+                            <strong>Received:</strong> ${e.received_date ? e.received_date.split('T')[0] : 'Unknown'}
+                        </div>
+                        <div class="meta">
+                            <strong>Body Preview:</strong>
+                        </div>
+                        <div class="body-preview">${(e.raw_body || 'No content').slice(0, 500)}${(e.raw_body || '').length > 500 ? '...' : ''}</div>
+                    </div>
+                `).join('');
+            })
+            .catch(err => {
+                document.getElementById('output').innerHTML = `<div class="empty">Error loading data: ${err}</div>`;
+            });
+    </script>
+</body>
+</html>

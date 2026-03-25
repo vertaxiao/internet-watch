@@ -66,40 +66,18 @@
         }
         .main-content {
             margin-left: 220px;
-            padding: 0;
+            padding: 20px;
             flex: 1;
         }
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 0 20px;
         }
         .section {
             display: none;
-            width: 100%;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px 40px;
         }
         .section.active {
             display: block;
-        }
-        /* Responsive centering for all screen sizes */
-        @media (max-width: 1400px) {
-            .section {
-                padding: 20px 20px;
-            }
-        }
-        @media (max-width: 768px) {
-            .section {
-                padding: 15px 15px;
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .sidebar {
-                display: none;
-            }
         }
         .cybernews-header {
             background: linear-gradient(135deg, #3e2723 0%, #5d4037 100%);
@@ -325,30 +303,31 @@
     </aside>
 
     <div class="main-content">
-        <!-- Home Section -->
-        <div id="section-home" class="section active">
-            <header>
-                <h1>🌐 NetWatch</h1>
-                <p class="subtitle">Network Device Monitoring Dashboard</p>
-            </header>
+        <div class="container">
+            <!-- Home Section -->
+            <div id="section-home" class="section active">
+                <header>
+                    <h1>🌐 NetWatch</h1>
+                    <p class="subtitle">Network Device Monitoring Dashboard</p>
+                </header>
 
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-number" id="total-count">0</div>
-                    <div class="stat-label">Total Devices</div>
-                </div>
-                <div class="stat-card online">
-                    <div class="stat-number" id="online-count">0</div>
-                    <div class="stat-label">Online</div>
-                </div>
-                <div class="stat-card offline">
-                    <div class="stat-number" id="offline-count">0</div>
-                    <div class="stat-label">Offline</div>
-                </div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="total-count">0</div>
+                <div class="stat-label">Total Devices</div>
             </div>
+            <div class="stat-card online">
+                <div class="stat-number" id="online-count">0</div>
+                <div class="stat-label">Online</div>
+            </div>
+            <div class="stat-card offline">
+                <div class="stat-number" id="offline-count">0</div>
+                <div class="stat-label">Offline</div>
+            </div>
+        </div>
 
         <div class="chart-container">
-            <canvas id="combinedChart"></canvas>
+            <canvas id="historyChart"></canvas>
         </div>
 
         <div class="table-container">
@@ -369,9 +348,11 @@
             </table>
         </div>
 
-            <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Now</button>
-            <p class="last-update" id="last-update">Last updated: Never</p>
+        <button class="refresh-btn" onclick="refreshData()">🔄 Refresh Now</button>
+        <p class="last-update" id="last-update">Last updated: Never</p>
         </div>
+    </div>
+            </div>
 
             <!-- New Devices Section -->
             <div id="section-newdevices" class="section">
@@ -422,10 +403,6 @@
                     <div class="stat-card online">
                         <div class="stat-number" id="email-clean">0</div>
                         <div class="stat-label">Clean</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-number" id="email-junk">0</div>
-                        <div class="stat-label">Junk</div>
                     </div>
                     <div class="stat-card offline">
                         <div class="stat-number" id="email-flagged">0</div>
@@ -485,24 +462,6 @@
                 </div>
 
                 <div class="table-container">
-                    <h3>🗑️ Junk Emails</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Subject</th>
-                                <th>Sender</th>
-                                <th>Risk Score</th>
-                                <th>Risk Level</th>
-                                <th>Timestamp</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="junk-emails-table">
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="table-container">
                     <h3>🚨 Flagged Emails</h3>
                     <table>
                         <thead>
@@ -533,11 +492,12 @@
 
                 <button class="refresh-btn" onclick="scanEmails()">🔍 Run Email Scan</button>
                 <p class="last-update" id="email-last-update">Last scan: Never</p>
+            </div>
         </div>
     </div>
 
     <script>
-        let combinedChart;
+        let historyChart;
 
         // Section navigation
         function showSection(sectionName) {
@@ -561,48 +521,77 @@
             }
         }
 
-        // Load cybernews data from API
+        // Load cybernews data (sample data for now)
         function loadCybernews() {
-            fetch('/api/cyber_news')
-                .then(res => res.json())
-                .then(data => {
-                    const newsGrid = document.getElementById('news-grid');
-                    if (!newsGrid) return;
-                    
-                    if (!data.newsItems || data.newsItems.length === 0) {
-                        newsGrid.innerHTML = '<p style="color:#888;">No cyber news available yet.</p>';
-                        return;
-                    }
-                    
-                    newsGrid.innerHTML = '';
-                    data.newsItems.forEach(item => {
-                        const card = document.createElement('div');
-                        card.className = `news-card ${item.severity.toLowerCase()}`;
-                        card.innerHTML = `
-                            <a href="${item.url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
-                                <div class="news-title">${item.headline}</div>
-                                <div class="news-meta">
-                                    <span class="news-badge badge-${item.severity.toLowerCase()}">${item.severity}</span>
-                                    ${item.source} • ${item.date}
-                                </div>
-                                <div class="news-excerpt">${item.summary}</div>
-                                <div style="margin-top:12px;color:#00d4ff;font-size:0.85rem;">Read more →</div>
-                            </a>
-                        `;
-                        newsGrid.appendChild(card);
-                    });
-                    
-                    // Update status subtitle if present
-                    if (data.status) {
-                        const statusEl = document.querySelector('.cybernews-subtitle');
-                        if (statusEl) statusEl.textContent = data.status;
-                    }
-                })
-                .catch(err => {
-                    console.error('Failed to load cyber news:', err);
-                    const newsGrid = document.getElementById('news-grid');
-                    if (newsGrid) newsGrid.innerHTML = '<p style="color:#888;">Failed to load cyber news.</p>';
-                });
+            const newsGrid = document.getElementById('news-grid');
+            const sampleNews = [
+                {
+                    title: "Critical Zero-Day Vulnerability in Popular Enterprise Software",
+                    source: "CVE-2026-1234",
+                    date: "2026-03-17",
+                    severity: "critical",
+                    excerpt: "A remote code execution vulnerability affecting millions of enterprise deployments. Patch immediately.",
+                    url: "https://nvd.nist.gov/vuln/detail/CVE-2026-1234"
+                },
+                {
+                    title: "Major Ransomware Campaign Targeting Healthcare Systems",
+                    source: "Threat Intel",
+                    date: "2026-03-16",
+                    severity: "high",
+                    excerpt: "New ransomware variant exploiting unpatched VPN appliances. Multiple hospitals affected.",
+                    url: "https://www.cisa.gov/ransomware-alert"
+                },
+                {
+                    title: "Phishing Campaign impersonating Cloud Storage Providers",
+                    source: "PhishTank",
+                    date: "2026-03-15",
+                    severity: "medium",
+                    excerpt: "Sophisticated phishing emails mimicking legitimate cloud storage login pages.",
+                    url: "https://www.phishtank.com/"
+                },
+                {
+                    title: "Open Source Library Maintains Security Updates",
+                    source: "GitHub Advisory",
+                    date: "2026-03-14",
+                    severity: "low",
+                    excerpt: "Minor input validation issue in popular JavaScript library. Update recommended.",
+                    url: "https://github.com/advisories"
+                },
+                {
+                    title: "New Botnet Targeting IoT Devices",
+                    source: "SecurityWeek",
+                    date: "2026-03-13",
+                    severity: "high",
+                    excerpt: "Mirai variant exploiting default credentials in smart home devices.",
+                    url: "https://www.securityweek.com/"
+                },
+                {
+                    title: "Data Breach Exposes Millions of User Records",
+                    source: "BleepingComputer",
+                    date: "2026-03-12",
+                    severity: "critical",
+                    excerpt: "Major cloud provider misconfiguration leads to massive data exposure.",
+                    url: "https://www.bleepingcomputer.com/"
+                }
+            ];
+            
+            newsGrid.innerHTML = '';
+            sampleNews.forEach(item => {
+                const card = document.createElement('div');
+                card.className = `news-card ${item.severity}`;
+                card.innerHTML = `
+                    <a href="${item.url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
+                        <div class="news-title">${item.title}</div>
+                        <div class="news-meta">
+                            <span class="news-badge badge-${item.severity}">${item.severity}</span>
+                            ${item.source} • ${item.date}
+                        </div>
+                        <div class="news-excerpt">${item.excerpt}</div>
+                        <div style="margin-top:12px;color:#00d4ff;font-size:0.85rem;">Read more →</div>
+                    </a>
+                `;
+                newsGrid.appendChild(card);
+            });
         }
 
         // Load email protection data
@@ -667,9 +656,8 @@
         function updateEmailProtection(data) {
             // Update stats
             document.getElementById('email-total').textContent = data.total_scanned || 0;
-            document.getElementById('email-clean').textContent = data.clean_count || 0;
-            document.getElementById('email-junk').textContent = data.junk_count || 0;
-            document.getElementById('email-flagged').textContent = data.flagged_count || 0;
+            document.getElementById('email-clean').textContent = (data.total_scanned || 0) - (data.flagged || 0);
+            document.getElementById('email-flagged').textContent = data.flagged || 0;
             
             // Update scam type breakdown
             const scamTypes = {
@@ -706,25 +694,25 @@
                 tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">No scam types detected in recent scans</td></tr>';
             }
             
-            // Separate flagged, junk, and legit emails
+            // Separate flagged and legit emails
             const allEmails = data.results || [];
             const flaggedEmails = allEmails.filter(e => e.risk_level === 'HIGH' || e.risk_level === 'CRITICAL');
-            const junkEmails = allEmails.filter(e => e.risk_level === 'MEDIUM');
-            const legitEmails = allEmails.filter(e => e.risk_level === 'LOW');
+            const legitEmails = allEmails.filter(e => e.risk_level === 'LOW' || e.risk_level === 'MEDIUM');
             
-            // Update legit emails table (LOW risk only)
+            // Update legit emails table
             const legitTbody = document.getElementById('legit-emails-table');
             legitTbody.innerHTML = '';
             
             legitEmails.forEach(email => {
                 const row = document.createElement('tr');
+                const riskClass = email.risk_level === 'MEDIUM' ? 'badge-medium' : 'badge-low';
                 
                 row.innerHTML = `
                     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.subject}</td>
                     <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.sender}</td>
                     <td>${email.risk_score}</td>
-                    <td><span class="news-badge badge-low">${email.risk_level}</span></td>
-                    <td>${formatDate(email.received_date || email.timestamp)}</td>
+                    <td><span class="news-badge ${riskClass}">${email.risk_level}</span></td>
+                    <td>${formatDate(email.timestamp)}</td>
                     <td><button onclick="viewEmail('${email.account}', '${email.message_id}')" style="background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;">👁️ View</button></td>
                 `;
                 legitTbody.appendChild(row);
@@ -734,43 +722,23 @@
                 legitTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">No legit emails in recent scan</td></tr>';
             }
             
-            // Update junk emails table (MEDIUM risk)
-            const junkTbody = document.getElementById('junk-emails-table');
-            junkTbody.innerHTML = '';
-            
-            junkEmails.forEach(email => {
-                const row = document.createElement('tr');
-                
-                row.innerHTML = `
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.subject}</td>
-                    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.sender}</td>
-                    <td>${email.risk_score}</td>
-                    <td><span class="news-badge badge-medium">${email.risk_level}</span></td>
-                    <td>${formatDate(email.received_date || email.timestamp)}</td>
-                    <td><button onclick="viewEmail('${email.account}', '${email.message_id}')" style="background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;">👁️ View</button></td>
-                `;
-                junkTbody.appendChild(row);
-            });
-            
-            if (junkEmails.length === 0) {
-                junkTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">No junk emails detected ✅</td></tr>';
-            }
-            
-            // Update flagged emails table (HIGH/CRITICAL risk)
+            // Update flagged emails table
             const emailTbody = document.getElementById('flagged-emails-table');
             emailTbody.innerHTML = '';
             
             flaggedEmails.forEach(email => {
                 const row = document.createElement('tr');
-                const riskClass = email.risk_level === 'CRITICAL' ? 'badge-critical' : 'badge-high';
+                const riskClass = email.risk_level === 'CRITICAL' ? 'badge-critical' : 
+                                  email.risk_level === 'HIGH' ? 'badge-high' : 
+                                  email.risk_level === 'MEDIUM' ? 'badge-medium' : 'badge-low';
                 
                 row.innerHTML = `
                     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.subject}</td>
                     <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.sender}</td>
-                    <td>${email.classifications.map(c => `<span class="news-badge badge-medium" style="margin:2px;">${c.type.replace(/_/g, ' ')}</span>`).join('')}</td>
+                    <td>${email.classifications.map(c => `<span class="news-badge badge-medium" style="margin:2px;">${c.replace(/_/g, ' ')}</span>`).join('')}</td>
                     <td>${email.risk_score}</td>
                     <td><span class="news-badge ${riskClass}">${email.risk_level}</span></td>
-                    <td>${formatDate(email.received_date || email.timestamp)}</td>
+                    <td>${formatDate(email.timestamp)}</td>
                     <td><button onclick="viewEmail('${email.account}', '${email.message_id}')" style="background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;">👁️ View</button></td>
                 `;
                 emailTbody.appendChild(row);
@@ -1218,19 +1186,19 @@
                 
                 document.getElementById('viewer-subject').textContent = data.subject || 'No Subject';
                 
-                const fromName = data.from?.emailAddress?.name || data.from?.name || (data.from || '');
-                const fromEmail = data.from?.emailAddress?.address || data.from?.address || (data.from || '');
-                const date = data.received_date || data.date || '';
+                const fromName = data.from?.emailAddress?.name || data.from?.name || '';
+                const fromEmail = data.from?.emailAddress?.address || data.from?.address || '';
+                const date = data.date || data.receivedDateTime || '';
                 
                 document.getElementById('viewer-meta').innerHTML = `
-                    <strong>From:</strong> ${fromName} (${fromEmail})<br>
-                    <strong>Date:</strong> ${date ? new Date(date).toLocaleString() : 'Unknown'}<br>
+                    <strong>From:</strong> ${fromName || fromEmail} (${fromEmail})<br>
+                    <strong>Date:</strong> ${new Date(date).toLocaleString()}<br>
                     <strong>Account:</strong> ${account}
                 `;
                 
-                // Show body content - prefer plain text, fall back to HTML
-                const body = data.body || data.html_body || 'No content available';
-                document.getElementById('viewer-body').textContent = body.length > 100 ? body : (data.html_body || 'No content available');
+                // Show plain text body, fall back to HTML if not available
+                const body = data.body || data.html_body || 'No content';
+                document.getElementById('viewer-body').textContent = body;
                 
             } catch (error) {
                 console.error('Error loading email:', error);
@@ -1273,18 +1241,18 @@
         }
 
         function initChart() {
-            const ctx = document.getElementById('combinedChart').getContext('2d');
-            combinedChart = new Chart(ctx, {
-                type: 'bar',
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            historyChart = new Chart(ctx, {
+                type: 'line',
                 data: {
                     labels: [],
                     datasets: [{
-                        type: 'bar',
-                        label: 'Total Devices',
+                        label: 'Online Devices',
                         data: [],
-                        backgroundColor: 'rgba(52, 199, 89, 0.6)',
                         borderColor: '#34c759',
-                        borderWidth: 1
+                        backgroundColor: 'rgba(52, 199, 89, 0.1)',
+                        fill: true,
+                        tension: 0.4
                     }]
                 },
                 options: {
@@ -1293,29 +1261,15 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Total Devices - Last 7 Days'
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
+                            text: 'Device Count Over Time'
                         }
                     },
                     scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            }
-                        },
                         y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'Device Count'
-                            },
-                            beginAtZero: true
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
                         }
                     }
                 }
@@ -1353,25 +1307,18 @@
             });
         }
 
-        function updateCombinedChart(deviceCounts) {
-            if (!deviceCounts || deviceCounts.length === 0) {
-                console.log('No device counts data');
-                return;
-            }
+        function updateChart(history) {
+            if (!history || history.length === 0) return;
 
-            const labels = deviceCounts.map(d => {
-                const date = new Date(d.day);
-                return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            const labels = history.map(h => {
+                const date = new Date(h.timestamp);
+                return date.toLocaleTimeString();
             });
+            const data = history.map(h => h.online);
 
-            const data = deviceCounts.map(d => d.device_count || 0);
-
-            console.log('Device counts chart:', labels.length, 'days');
-            console.log('  Data:', data);
-
-            combinedChart.data.labels = labels;
-            combinedChart.data.datasets[0].data = data;
-            combinedChart.update();
+            historyChart.data.labels = labels;
+            historyChart.data.datasets[0].data = data;
+            historyChart.update();
         }
 
         function formatDate(isoString) {
@@ -1386,16 +1333,15 @@
 
         async function refreshData() {
             try {
-                const response = await fetch('/api/devices');
+                const response = await fetch('/api/scan');
                 const devices = await response.json();
                 updateStats(devices);
                 updateTable(devices);
                 updateLastUpdate();
 
-                const deviceCountsResponse = await fetch('/api/device_counts');
-                const deviceCounts = await deviceCountsResponse.json();
-
-                updateCombinedChart(deviceCounts);
+                const historyResponse = await fetch('/api/history');
+                const history = await historyResponse.json();
+                updateChart(history);
             } catch (error) {
                 console.error('Error fetching data:', error);
             }
@@ -1409,4 +1355,6 @@
         setInterval(refreshData, 60000);
     </script>
 </body>
+</html>
+dy>
 </html>

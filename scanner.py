@@ -20,8 +20,25 @@ DEVICE_NAMES = {
     "77:88:99:aa:bb:cc": "Living Room TV",
 }
 
+def _is_fake_device(ip: str, mac: str) -> bool:
+    """Filter out multicast, link-local, and placeholder entries."""
+    # Multicast IPs (224.x.x.x, 239.x.x.x)
+    if ip.startswith("224.") or ip.startswith("239."):
+        return True
+    # Link-local (169.254.x.x)
+    if ip.startswith("169.254."):
+        return True
+    # Empty or placeholder MACs
+    if not mac or mac == "00:00:00:00:00:00":
+        return True
+    # Multicast MACs (start with 01:00:5E)
+    if mac.upper().startswith("01:00:5E"):
+        return True
+    return False
+
+
 def parse_arp_output():
-    """Parse `arp -a` output to extract device info."""
+    """Parse `arp -a` output to extract real device info (filters fake entries)."""
     result = subprocess.run(["arp", "-a"], capture_output=True, text=True)
     lines = result.stdout.strip().split("\n")
     
@@ -33,6 +50,11 @@ def parse_arp_output():
         if match:
             ip = match.group(1)
             mac = match.group(2).replace("-", ":").upper()
+            
+            # Skip fake/non-real devices
+            if _is_fake_device(ip, mac):
+                continue
+            
             # Try to extract hostname if present
             hostname = ""
             if "?" not in line:
