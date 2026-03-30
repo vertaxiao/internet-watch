@@ -8,6 +8,9 @@ Network device monitoring and email scam detection system.
 
 ## Collaborators
 - **Verta** - AI coordinator/PM
+- **Libro** - research/reading specialist for cyber news, books, papers, and reference material; distills findings into actionable briefs for Mino and Claude
+- **Mino** - security reviewer/threat-modeling specialist; applies Libro's research to NetWatch risk analysis, priorities, and review guidance
+- **Claude** - implementation/hardening agent; executes approved NetWatch changes based on Mino's plan and Libro-informed context
 - **Meno** - AI assistant (collaborated with Andy)
 
 ## Documents
@@ -25,6 +28,9 @@ Network device monitoring and email scam detection system.
 - Before network scan changes → read `scanner.py` + `db.py`
 - Before email detection changes → read `email_scams.py` + review `email_scans/`
 - Before UI changes → read `dashboard.py` + `index.html`
+- **Libro lane:** Libro is responsible for reading cyber news, books, papers, runbooks, and other required reference material; producing concise research summaries; and updating Mino and Claude with distilled findings relevant to NetWatch
+- **Mino lane:** Mino applies Libro's research to threat modeling, security review, prioritization, and operational recommendations for NetWatch
+- **Claude lane:** Claude implements approved NetWatch changes using the latest Libro/Mino context and reports concrete code/test results
 - After major decisions → log to `memory/decisions.md` (create if needed)
 - Check `devices.json` and `history.json` for current state
 
