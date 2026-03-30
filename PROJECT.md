@@ -11,6 +11,7 @@ Network device monitoring and email scam detection system.
 - **Libro** - research/reading specialist for cyber news, books, papers, and reference material; distills findings into actionable briefs for Mino and Claude
 - **Mino** - security reviewer/threat-modeling specialist; applies Libro's research to NetWatch risk analysis, priorities, and review guidance
 - **Claude** - implementation/hardening agent; executes approved NetWatch changes based on Mino's plan and Libro-informed context
+- **Mina** - QA/testing specialist; validates every implemented change, checks requirements coverage, runs regression/acceptance testing, and sends failed work back to Claude for fixes
 - **Meno** - AI assistant (collaborated with Andy)
 
 ## Documents
@@ -31,6 +32,8 @@ Network device monitoring and email scam detection system.
 - **Libro lane:** Libro is responsible for reading cyber news, books, papers, runbooks, and other required reference material; producing concise research summaries; and updating Mino and Claude with distilled findings relevant to NetWatch
 - **Mino lane:** Mino applies Libro's research to threat modeling, security review, prioritization, and operational recommendations for NetWatch
 - **Claude lane:** Claude implements approved NetWatch changes using the latest Libro/Mino context and reports concrete code/test results
+- **Mina lane:** Mina is the testing and quality gate. She must test each Claude change, verify that the implementation satisfies all user requests, run regression/acceptance checks, and explicitly send work back to Claude when tests fail or when any request is only partially met
+- **QA loop rule:** No implementation is considered done until Mina verifies pass status against both tests and requested behavior. Failed tests, regressions, or missing user-requested features must be returned to Claude for another implementation pass
 - After major decisions → log to `memory/decisions.md` (create if needed)
 - Check `devices.json` and `history.json` for current state
 
