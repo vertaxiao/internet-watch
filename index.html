@@ -6,6 +6,7 @@
     <title>NetWatch - Network Device Monitor</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="/static/app.js"></script>
     <style>
         * {
             margin: 0;
@@ -68,6 +69,39 @@
             margin-left: 220px;
             padding: 0;
             flex: 1;
+        }
+        /* ── Section status bar ───────────────────────────────────────────── */
+        .section-status-bar {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            transition: background 0.3s, color 0.3s;
+        }
+        .section-status-bar.good {
+            background: rgba(0, 230, 118, 0.12);
+            color: #00e676;
+            border: 1px solid rgba(0, 230, 118, 0.3);
+        }
+        .section-status-bar.warning {
+            background: rgba(255, 171, 0, 0.12);
+            color: #ffab00;
+            border: 1px solid rgba(255, 171, 0, 0.3);
+        }
+        .section-status-bar.alert {
+            background: rgba(255, 71, 87, 0.12);
+            color: #ff4757;
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
+        .section-status-bar.loading {
+            background: rgba(150, 150, 150, 0.1);
+            color: #888;
+            border: 1px solid rgba(150, 150, 150, 0.2);
         }
         .container {
             max-width: 1200px;
@@ -307,6 +341,8 @@
         .refresh-btn:hover {
             background: #00a8cc;
         }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    details > summary::-webkit-details-marker { display: none; }
     </style>
 </head>
 <body>
@@ -320,6 +356,9 @@
                 <li><a href="#" onclick="showSection('newdevices')" id="nav-newdevices">🆕 New Devices</a></li>
                 <li><a href="#" onclick="showSection('cybernews')" id="nav-cybernews">📰 Cyber News</a></li>
                 <li><a href="#" onclick="showSection('emailprotection')" id="nav-emailprotection">🛡️ Email Protection</a></li>
+                <li><a href="#" onclick="showSection('firewall'); loadFirewall()" id="nav-firewall">🔥 Firewall</a></li>
+                <li><a href="#" onclick="showSection('llm')" id="nav-llm">🧠 LLMs</a></li>
+                <li><a href="#" onclick="showSection('wifistatus')" id="nav-wifistatus">📶 WiFi Status</a></li>
             </ul>
         </nav>
     </aside>
@@ -330,6 +369,7 @@
             <header>
                 <h1>🌐 NetWatch</h1>
                 <p class="subtitle">Network Device Monitoring Dashboard</p>
+                <div class="section-status-bar loading" id="status-home">⏳ Loading…</div>
             </header>
 
             <div class="stats-grid">
@@ -347,8 +387,60 @@
                 </div>
             </div>
 
+        <!-- Firewall Status Widget -->
+        <div class="table-container" style="margin-bottom:20px;">
+            <h3>🔥 Network Firewall Status <span id="fw-widget-dot" style="font-size:0.8rem;margin-left:8px;color:#888;">●</span></h3>
+            <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:15px 0 5px;">
+                <div class="stat-card" style="padding:14px;">
+                    <div style="font-size:1.6rem;" id="fw-w-gateway">—</div>
+                    <div class="stat-label">Router / Gateway</div>
+                </div>
+                <div class="stat-card" style="padding:14px;">
+                    <div style="font-size:1.6rem;" id="fw-w-ext">—</div>
+                    <div class="stat-label">External Connections</div>
+                </div>
+                <div class="stat-card" style="padding:14px;">
+                    <div style="font-size:1.6rem;" id="fw-w-flagged">—</div>
+                    <div class="stat-label">⚠️ Flagged</div>
+                </div>
+                <div class="stat-card" style="padding:14px;">
+                    <div style="font-size:1.6rem;" id="fw-w-ports">—</div>
+                    <div class="stat-label">Open Ports</div>
+                </div>
+            </div>
+            <div id="fw-w-alert" style="display:none;background:rgba(255,71,87,0.12);border-left:4px solid #ff4757;padding:10px 15px;border-radius:0 8px 8px 0;margin-top:10px;color:#ff4757;font-size:0.9rem;"></div>
+            <div style="text-align:right;margin-top:8px;">
+                <a href="#" onclick="showSection('firewall'); loadFirewall()" style="color:#00d4ff;font-size:0.85rem;text-decoration:none;">View full firewall details →</a>
+                <span id="fw-w-updated" style="color:#555;font-size:0.75rem;margin-left:12px;"></span>
+            </div>
+        </div>
+
+        <!-- LLM Theft Status Widget -->
+        <div class="table-container" style="margin-bottom:20px;">
+            <h3>🔒 Model Theft Status <span id="theft-widget-dot" style="font-size:0.8rem;margin-left:8px;color:#888;">●</span></h3>
+            <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:15px 0 5px;">
+                <div class="stat-card" style="padding:14px;" id="theft-w-status-card">
+                    <div style="font-size:1.6rem;" id="theft-w-status">—</div>
+                    <div class="stat-label">Theft Detection</div>
+                </div>
+                <div class="stat-card" style="padding:14px;">
+                    <div style="font-size:1.6rem;" id="theft-w-volume">—</div>
+                    <div class="stat-label">Volume Check</div>
+                </div>
+                <div class="stat-card" style="padding:14px;">
+                    <div style="font-size:1.6rem;" id="theft-w-patterns">—</div>
+                    <div class="stat-label">Query Patterns</div>
+                </div>
+            </div>
+            <div id="theft-w-alert" style="display:none;background:rgba(255,71,87,0.12);border-left:4px solid #ff4757;padding:10px 15px;border-radius:0 8px 8px 0;margin-top:10px;color:#ff4757;font-size:0.9rem;"></div>
+            <div style="text-align:right;margin-top:8px;">
+                <a href="#" onclick="showSection('llm'); loadLlm()" style="color:#00d4ff;font-size:0.85rem;text-decoration:none;">View full LLM details →</a>
+                <span id="theft-w-updated" style="color:#555;font-size:0.75rem;margin-left:12px;"></span>
+            </div>
+        </div>
+
         <div class="chart-container">
-            <canvas id="historyChart"></canvas>
+            <canvas id="combinedChart"></canvas>
         </div>
 
         <div class="table-container">
@@ -378,6 +470,7 @@
                 <header>
                     <h1>🆕 New Devices</h1>
                     <p class="subtitle">Recently Discovered Network Devices</p>
+                    <div class="section-status-bar loading" id="status-newdevices">⏳ Loading…</div>
                 </header>
                 <div class="table-container">
                     <table>
@@ -401,6 +494,7 @@
                 <div class="cybernews-header">
                     <div class="cybernews-title">📰 Recent Cybernews</div>
                     <div class="cybernews-subtitle">Latest cybersecurity threats, vulnerabilities, and breach reports</div>
+                    <div class="section-status-bar loading" id="status-cybernews" style="margin-bottom:10px;">⏳ Loading…</div>
                 </div>
                 <div class="news-grid" id="news-grid">
                     <!-- News cards will be populated by JavaScript -->
@@ -412,6 +506,7 @@
                 <header>
                     <h1>🛡️ Email Protection</h1>
                     <p class="subtitle">Real-time email scam detection and classification for family inboxes</p>
+                    <div class="section-status-bar loading" id="status-emailprotection">⏳ Loading…</div>
                 </header>
 
                 <div class="stats-grid">
@@ -531,16 +626,529 @@
                     </div>
                 </div>
 
+                <!-- ── On-Demand Domain Verification ───────────────────── -->
+                <div class="table-container" style="margin-top:28px;">
+                    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px;">
+                        <h3 style="margin:0;">🔎 On-Demand Domain Verification</h3>
+                        <span style="font-size:0.73rem;color:#444;background:rgba(0,212,255,0.08);
+                                     border:1px solid rgba(0,212,255,0.2);padding:2px 8px;border-radius:10px;">
+                            Tier 1 + Mino Deep Research
+                        </span>
+                    </div>
+                    <p style="color:#888;font-size:0.83rem;margin:6px 0 14px;">
+                        Paste any email address or bare domain. Runs the full two-tier pipeline:
+                        instant typosquat/brand-anchor screening (Tier 1) followed by Mino's
+                        live anchor search, community signals, DNSBL reputation, and Site DNA
+                        comparison (Tier 2).
+                    </p>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <!-- Row 1: Email + action buttons -->
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                            <input id="domain-check-input"
+                                   type="text"
+                                   placeholder="e.g. support@mircosoft.com or deltaairlines.com"
+                                   style="flex:1;min-width:220px;padding:9px 14px;background:rgba(255,255,255,0.06);
+                                          border:1px solid rgba(255,255,255,0.18);border-radius:5px;color:#eee;
+                                          font-size:0.9rem;outline:none;"
+                                   onkeydown="if(event.key==='Enter') runDomainInspect()" />
+                            <button onclick="runDomainInspect()"
+                                    style="padding:9px 20px;border-radius:5px;border:1px solid #00d4ff;
+                                           background:transparent;color:#00d4ff;cursor:pointer;font-size:0.9rem;
+                                           white-space:nowrap;">
+                                Deep Research
+                            </button>
+                            <button onclick="checkEmailDomain()"
+                                    title="Tier 1 only — instant, no deep research"
+                                    style="padding:9px 16px;border-radius:5px;border:1px solid #555;
+                                           background:transparent;color:#777;cursor:pointer;font-size:0.85rem;
+                                           white-space:nowrap;">
+                                Quick Check
+                            </button>
+                            <button onclick="verifyIdentity()"
+                                    title="Sequential identity gate: DNS → structural → auth → subject alignment → verdict"
+                                    style="padding:9px 16px;border-radius:5px;border:1px solid #a78bfa;
+                                           background:transparent;color:#a78bfa;cursor:pointer;font-size:0.85rem;
+                                           white-space:nowrap;">
+                                Verify Identity
+                            </button>
+                        </div>
+                        <!-- Row 2: Optional Subject for alignment analysis -->
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <label for="subject_input"
+                                   style="font-size:0.78rem;color:#555;white-space:nowrap;
+                                          min-width:52px;text-align:right;">Subject</label>
+                            <input id="subject_input"
+                                   type="text"
+                                   placeholder="Optional — paste email subject for brand-alignment check"
+                                   style="flex:1;padding:7px 12px;background:rgba(255,255,255,0.04);
+                                          border:1px solid rgba(255,255,255,0.10);border-radius:5px;
+                                          color:#ccc;font-size:0.83rem;outline:none;"
+                                   onkeydown="if(event.key==='Enter') runDomainInspect()" />
+                        </div>
+                    </div>
+                    <!-- Quick Check result (existing) -->
+                    <div id="domain-check-result" style="display:none;margin-top:18px;"></div>
+                    <!-- Deep Research result panel -->
+                    <div id="deep-research-panel" style="display:none;margin-top:20px;"></div>
+                    <!-- Verify Identity result panel -->
+                    <div id="verify-identity-panel" style="display:none;margin-top:20px;"></div>
+                </div>
+
+                <!-- ── Blacklisted Squatters ──────────────────────────────── -->
+                <div class="table-container" style="margin-top:24px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                        <h3>🚫 Blacklisted Squatters</h3>
+                        <button class="refresh-btn" onclick="loadSquatters()" style="padding:6px 14px;font-size:0.85rem;">🔄 Refresh</button>
+                    </div>
+                    <p style="color:#888;font-size:0.8rem;margin:0 0 12px;">
+                        Non-existent domains that impersonate protected brands — automatically added when a
+                        <strong style="color:#ff4757;">CRITICAL: Non-Existent Forgery</strong> is detected.
+                    </p>
+                    <div id="squatters-empty" style="color:#555;padding:14px 0;display:none;">No squatter domains recorded yet.</div>
+                    <table id="squatters-table" style="width:100%;border-collapse:collapse;display:none;">
+                        <thead>
+                            <tr style="text-align:left;border-bottom:1px solid #333;">
+                                <th style="padding:9px 12px;">Squatter Domain</th>
+                                <th style="padding:9px 12px;">Impersonating</th>
+                                <th style="padding:9px 12px;">Status</th>
+                                <th style="padding:9px 12px;">Verdict</th>
+                                <th style="padding:9px 12px;">Reason</th>
+                                <th style="padding:9px 12px;">First Seen</th>
+                                <th style="padding:9px 12px;width:80px;text-align:center;">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="squatters-tbody"></tbody>
+                    </table>
+                </div>
+
                 <button class="refresh-btn" onclick="scanEmails()">🔍 Run Email Scan</button>
                 <p class="last-update" id="email-last-update">Last scan: Never</p>
         </div>
+
+        <!-- Firewall Section -->
+        <div id="section-firewall" class="section">
+            <header>
+                <h1>🔥 Network Firewall Monitor</h1>
+                <p class="subtitle">Live network security status — connections, open ports, vulnerabilities</p>
+                <div class="section-status-bar loading" id="status-firewall">⏳ Loading…</div>
+            </header>
+
+            <!-- Vulnerability Alert Banner -->
+            <div id="fw-vuln-banner" style="display:none;background:rgba(255,71,87,0.15);border:1px solid #ff4757;border-radius:10px;padding:15px 20px;margin-bottom:20px;">
+                <div style="font-size:1.1rem;font-weight:700;color:#ff4757;margin-bottom:8px;">⚠️ Security Issues Detected</div>
+                <div id="fw-vuln-list" style="color:#ffb3b3;font-size:0.9rem;line-height:1.8;"></div>
+            </div>
+
+            <!-- Stats Row -->
+            <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:24px;">
+                <div class="stat-card">
+                    <div class="stat-number" style="font-size:1.4rem;" id="fw-gateway">—</div>
+                    <div class="stat-label">Router / Gateway</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="fw-ext-count">—</div>
+                    <div class="stat-label">External Connections</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="fw-flagged-count">—</div>
+                    <div class="stat-label">⚠️ Suspicious</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="fw-port-count">—</div>
+                    <div class="stat-label">Open Ports</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="fw-vuln-count">—</div>
+                    <div class="stat-label">🔴 Vulnerable Ports</div>
+                </div>
+            </div>
+
+            <!-- Vulnerability Report -->
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🔴 Vulnerability Report</h3>
+                <div id="fw-vuln-table-wrap">
+                    <p style="color:#888;padding:10px 0;">Loading…</p>
+                </div>
+            </div>
+
+            <!-- Open / Listening Ports -->
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🚪 Open / Listening Ports</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Port</th>
+                            <th>Risk Level</th>
+                            <th>Service</th>
+                            <th>Why It Matters</th>
+                            <th>Instructions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fw-ports-table">
+                        <tr><td colspan="5" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- External Connections -->
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🌍 Active External Connections</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Remote IP</th>
+                            <th>Port</th>
+                            <th>Hostname / Destination</th>
+                            <th>Your Address</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fw-ext-table">
+                        <tr><td colspan="5" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button class="refresh-btn" onclick="loadFirewall()">🔄 Refresh Now</button>
+            <p class="last-update" id="fw-last-update">Last updated: Never</p>
+        </div>
+
+        <div id="section-aiusage" class="section">
+            <header>
+                <h1>🤖 AI Model Usage</h1>
+                <p class="subtitle">Context window usage across all OpenClaw agents</p>
+            </header>
+
+            <div id="ai-usage-cards" class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:24px;">
+                <p style="color:#888;padding:10px 0;">Loading…</p>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🧠 Current Model</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Agent</th>
+                            <th>Primary Model</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ai-agents-table">
+                        <tr><td colspan="2" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>📊 Session Details</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Session</th>
+                            <th>Model</th>
+                            <th>Used</th>
+                            <th>Limit</th>
+                            <th>Remaining</th>
+                            <th>Usage</th>
+                            <th>Next Reset</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ai-usage-table">
+                        <tr><td colspan="7" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>💳 Billing</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Input Tokens</th>
+                            <th>Output Tokens</th>
+                            <th>Est. Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ai-billing-table">
+                        <tr><td colspan="4" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button class="refresh-btn" onclick="loadAiUsage()">🔄 Refresh Now</button>
+            <button class="refresh-btn" style="background:rgba(255,71,87,0.15);border-color:#ff4757;color:#ff4757;margin-left:10px;" onclick="triggerAiReset()">🗑 Reset Period Now</button>
+            <p class="last-update" id="ai-last-update">Last updated: Never</p>
+        </div>
+
+        <div id="section-llm" class="section">
+            <header>
+                <h1>🧠 LLMs</h1>
+                <p class="subtitle">LiteLLM proxy and Ollama model status</p>
+                <div class="section-status-bar loading" id="status-llm">⏳ Loading…</div>
+            </header>
+
+            <div class="stats-grid" id="llm-stat-cards">
+                <p style="color:#888;padding:10px 0;">Loading…</p>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🌐 Available via LiteLLM Proxy</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Provider</th>
+                        </tr>
+                    </thead>
+                    <tbody id="llm-litellm-table">
+                        <tr><td colspan="2" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🦙 Ollama Local Models</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Size</th>
+                            <th>Modified</th>
+                        </tr>
+                    </thead>
+                    <tbody id="llm-ollama-table">
+                        <tr><td colspan="3" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>⚡ Currently Running in Ollama</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Model</th>
+                            <th>Size</th>
+                            <th>VRAM</th>
+                            <th>Expires</th>
+                        </tr>
+                    </thead>
+                    <tbody id="llm-running-table">
+                        <tr><td colspan="4" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🔒 Model Theft Prevention</h3>
+                <div id="llm-theft-alert" style="display:none;margin-bottom:14px;border-radius:6px;padding:12px 16px;border-left:4px solid #ff4757;background:rgba(255,71,87,0.10);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:1.2rem;">🚨</span>
+                        <div>
+                            <div id="llm-theft-alert-title" style="color:#ff4757;font-weight:700;font-size:0.95rem;"></div>
+                            <div id="llm-theft-alert-reasons" style="color:#ffb3b8;font-size:0.82rem;margin-top:3px;"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="stats-grid" id="llm-theft-cards" style="margin-bottom:16px;">
+                    <p style="color:#888;padding:10px 0;">Loading…</p>
+                </div>
+                <div id="llm-spend-bar-wrap" style="margin-bottom:16px;"></div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Protection</th>
+                            <th>Setting</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="llm-theft-table">
+                        <tr><td colspan="3" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+                <div style="margin-top:16px;padding:12px 16px;border-radius:6px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);font-size:0.95rem;color:#ccc;">
+                    Threat Occurrences: <span id="llm-threat-occurrences" style="font-weight:700;font-size:1.1rem;color:#ccc;">—</span>
+                </div>
+                <div id="llm-burst-warn-wrap" style="margin-top:14px;"></div>
+                <div id="llm-autokill-wrap" style="margin-top:12px;"></div>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🔏 Watermark Status</h3>
+                <div id="wm-status-cards" class="stats-grid" style="margin-bottom:14px;">
+                    <p style="color:#888;padding:10px 0;">Loading…</p>
+                </div>
+                <div id="wm-probe-wrap"></div>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>🔍 Watermark Verifier</h3>
+                <p style="color:#888;font-size:0.82rem;margin-bottom:12px;">Paste any text generated through this proxy to check for embedded watermarks.</p>
+                <textarea id="wm-input" rows="5" placeholder="Paste text here…" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);border-radius:5px;color:#eee;padding:10px;font-size:0.85rem;resize:vertical;box-sizing:border-box;"></textarea>
+                <button onclick="verifyWatermark()" style="margin-top:8px;padding:7px 18px;border-radius:4px;border:1px solid #00d4ff;background:transparent;color:#00d4ff;cursor:pointer;font-size:0.85rem;">Verify</button>
+                <div id="wm-result" style="margin-top:12px;"></div>
+            </div>
+
+            <!-- Threat Summary Footer -->
+            <div class="table-container" style="margin-bottom:24px;border-top:1px solid rgba(255,255,255,0.08);padding-top:20px;">
+                <h3>⚠️ Threat Summary</h3>
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin:14px 0 10px;">
+                    <div class="stat-card" id="threat-counter-card" style="padding:18px;text-align:center;">
+                        <div class="stat-number" id="threat-occurrences-val" style="font-size:2.4rem;font-weight:700;">0</div>
+                        <div class="stat-label" style="margin-top:4px;">Threat Occurrences</div>
+                        <div style="font-size:0.72rem;color:#555;margin-top:4px;">since last restart</div>
+                    </div>
+                    <div class="stat-card" style="padding:18px;text-align:center;">
+                        <div class="stat-number" id="threat-last-reason-val" style="font-size:0.9rem;font-weight:600;color:#ccc;">—</div>
+                        <div class="stat-label" style="margin-top:4px;">Last Trigger Reason</div>
+                    </div>
+                    <div class="stat-card" style="padding:18px;text-align:center;">
+                        <div class="stat-number" id="threat-current-status-val" style="font-size:0.95rem;font-weight:700;">—</div>
+                        <div class="stat-label" style="margin-top:4px;">Current Status</div>
+                    </div>
+                </div>
+                <p style="color:#555;font-size:0.75rem;margin:0;">
+                    <code>threat_occurrences</code> increments once per detection event (volume threshold or unusual query pattern). Resets on server restart.
+                </p>
+            </div>
+
+            <button class="refresh-btn" onclick="loadLlm(); loadAiThreats(); loadFingerprinting()">🔄 Refresh Now</button>
+            <p class="last-update" id="llm-last-update">Last updated: Never</p>
+
+            <!-- ── AI Threat Guard ─────────────────────────────────────────── -->
+            <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:28px;padding-top:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                    <div>
+                        <h2 style="margin:0;font-size:1.15rem;">🛡️ AI Threat Guard</h2>
+                        <p style="margin:4px 0 0;font-size:0.8rem;color:#888;">Blocked AI-specific attacks (injection, poisoning, obfuscated payloads)</p>
+                    </div>
+                    <button class="refresh-btn" onclick="loadAiThreats()" style="padding:6px 14px;font-size:0.85rem;">🔄 Refresh</button>
+                </div>
+                <div class="section-status-bar loading" id="status-aithreats" style="margin-bottom:16px;">⏳ Loading…</div>
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:20px;">
+                    <div class="stat-card"><div class="stat-number" id="ait-total">0</div><div class="stat-label">Total Events</div></div>
+                    <div class="stat-card" style="border-left:4px solid #ff4757;"><div class="stat-number" id="ait-blocked" style="color:#ff4757;">0</div><div class="stat-label">Requests Blocked</div></div>
+                    <div class="stat-card" id="ait-status-card"><div class="stat-number" id="ait-latest-status" style="font-size:1rem;padding-top:6px;">—</div><div class="stat-label">Latest Status</div></div>
+                </div>
+                <div class="table-container">
+                    <div id="ait-empty" style="color:#888;padding:20px 0;display:none;">No AI threat events recorded yet.</div>
+                    <table id="ait-table" style="display:none;width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="text-align:left;border-bottom:1px solid #444;">
+                                <th style="padding:10px 12px;width:110px;">Status</th>
+                                <th style="padding:10px 12px;">Threat Type</th>
+                                <th style="padding:10px 12px;width:180px;">Time</th>
+                                <th style="padding:10px 12px;width:120px;">Source</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ait-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="ait-detail" style="display:none;margin-top:16px;" class="table-container">
+                    <h3 style="margin-bottom:10px;">🔧 IT Support — Mitigation Steps</h3>
+                    <div id="ait-detail-threat" style="font-weight:600;color:#ffab91;margin-bottom:8px;"></div>
+                    <ol id="ait-detail-steps" style="padding-left:20px;line-height:1.9;color:#ccc;"></ol>
+                    <button onclick="document.getElementById('ait-detail').style.display='none'"
+                            style="margin-top:14px;background:#4e342e;color:#fff;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;">Close</button>
+                </div>
+                <p class="last-update" id="ait-last-update">Last updated: Never</p>
+            </div>
+
+            <!-- ── LLM Output Fingerprinting ───────────────────────────────── -->
+            <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:28px;padding-top:24px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                    <div>
+                        <h2 style="margin:0;font-size:1.15rem;">🔬 LLM Output Fingerprinting</h2>
+                        <p style="margin:4px 0 0;font-size:0.8rem;color:#888;">Detects model distillation, API re-serving, and adversarial probing via output signature analysis</p>
+                    </div>
+                    <button class="refresh-btn" onclick="loadFingerprinting()" style="padding:6px 14px;font-size:0.85rem;">🔄 Refresh</button>
+                </div>
+                <div class="section-status-bar loading" id="status-fingerprinting" style="margin-bottom:16px;">⏳ Loading…</div>
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:20px;">
+                    <div class="stat-card"><div class="stat-number" id="fp-total">0</div><div class="stat-label">Total Threat Events</div></div>
+                    <div class="stat-card" style="border-left:4px solid #ffab00;"><div class="stat-number" id="fp-active" style="color:#ffab00;">0</div><div class="stat-label">Active Threat Types</div></div>
+                    <div class="stat-card"><div class="stat-number" id="fp-last-seen" style="font-size:0.85rem;padding-top:8px;">—</div><div class="stat-label">Last Event</div></div>
+                </div>
+                <div class="table-container">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="text-align:left;border-bottom:1px solid #444;">
+                                <th style="padding:10px 12px;">Threat Type</th>
+                                <th style="padding:10px 12px;width:70px;text-align:center;">Count</th>
+                                <th style="padding:10px 12px;">Last Model</th>
+                                <th style="padding:10px 12px;">Description</th>
+                                <th style="padding:10px 12px;width:100px;text-align:center;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fp-tbody"></tbody>
+                    </table>
+                </div>
+                <p class="last-update" id="fp-last-update">Last updated: Never</p>
+            </div>
+        </div>
+
+        <div id="section-wifistatus" class="section">
+            <header>
+                <h1>📶 WiFi Status</h1>
+                <p class="subtitle">Detected WiFi interfaces and network connectivity</p>
+                <div class="section-status-bar loading" id="status-wifistatus">⏳ Loading…</div>
+            </header>
+
+            <div class="stats-grid" id="wifi-stat-cards">
+                <p style="color:#888;padding:10px 0;">Loading…</p>
+            </div>
+
+            <div class="table-container" style="margin-bottom:24px;">
+                <h3>📡 WiFi Networks</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>WiFi Network (SSID)</th>
+                            <th>IP Address</th>
+                            <th>Interface</th>
+                            <th>Connectivity</th>
+                            <th>Default Gateway</th>
+                        </tr>
+                    </thead>
+                    <tbody id="wifi-networks-table">
+                        <tr><td colspan="5" style="text-align:center;color:#888;">Loading…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <button class="refresh-btn" onclick="loadWifiStatus()">🔄 Refresh Now</button>
+            <p class="last-update" id="wifi-last-update">Last updated: Never</p>
+        </div>
+
     </div>
 
     <script>
-        let historyChart;
+        let combinedChart;
+
+        // ── Security: HTML escape helper ──────────────────────────────────────
+        function escHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = String(str ?? '');
+            return div.innerHTML;
+        }
 
         // Section navigation
+        // ── Shared helpers ────────────────────────────────────────────────────
+        async function fetchJSON(path) {
+            const res = await fetch(path);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
+        function set(id, val) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        }
+
         function showSection(sectionName) {
+            // Stop firewall monitor if leaving that section
+            stopFirewallMonitor();
+
             // Hide all sections
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             // Show selected section
@@ -558,80 +1166,81 @@
             } else if (sectionName === 'emailprotection') {
                 loadEmailProtection();
                 loadWeeklyScamChart();
+                loadSquatters();
+            } else if (sectionName === 'firewall') {
+                startFirewallMonitor();
+            } else if (sectionName === 'aiusage') {
+                loadAiUsage();
+            } else if (sectionName === 'llm') {
+                loadLlm();
+                loadAiThreats();
+                loadFingerprinting();
+            } else if (sectionName === 'wifistatus') {
+                loadWifiStatus();
             }
         }
 
-        // Load cybernews data (sample data for now)
+        // Load cybernews data from API
         function loadCybernews() {
-            const newsGrid = document.getElementById('news-grid');
-            const sampleNews = [
-                {
-                    title: "Critical Zero-Day Vulnerability in Popular Enterprise Software",
-                    source: "CVE-2026-1234",
-                    date: "2026-03-17",
-                    severity: "critical",
-                    excerpt: "A remote code execution vulnerability affecting millions of enterprise deployments. Patch immediately.",
-                    url: "https://nvd.nist.gov/vuln/detail/CVE-2026-1234"
-                },
-                {
-                    title: "Major Ransomware Campaign Targeting Healthcare Systems",
-                    source: "Threat Intel",
-                    date: "2026-03-16",
-                    severity: "high",
-                    excerpt: "New ransomware variant exploiting unpatched VPN appliances. Multiple hospitals affected.",
-                    url: "https://www.cisa.gov/ransomware-alert"
-                },
-                {
-                    title: "Phishing Campaign impersonating Cloud Storage Providers",
-                    source: "PhishTank",
-                    date: "2026-03-15",
-                    severity: "medium",
-                    excerpt: "Sophisticated phishing emails mimicking legitimate cloud storage login pages.",
-                    url: "https://www.phishtank.com/"
-                },
-                {
-                    title: "Open Source Library Maintains Security Updates",
-                    source: "GitHub Advisory",
-                    date: "2026-03-14",
-                    severity: "low",
-                    excerpt: "Minor input validation issue in popular JavaScript library. Update recommended.",
-                    url: "https://github.com/advisories"
-                },
-                {
-                    title: "New Botnet Targeting IoT Devices",
-                    source: "SecurityWeek",
-                    date: "2026-03-13",
-                    severity: "high",
-                    excerpt: "Mirai variant exploiting default credentials in smart home devices.",
-                    url: "https://www.securityweek.com/"
-                },
-                {
-                    title: "Data Breach Exposes Millions of User Records",
-                    source: "BleepingComputer",
-                    date: "2026-03-12",
-                    severity: "critical",
-                    excerpt: "Major cloud provider misconfiguration leads to massive data exposure.",
-                    url: "https://www.bleepingcomputer.com/"
-                }
-            ];
-            
-            newsGrid.innerHTML = '';
-            sampleNews.forEach(item => {
-                const card = document.createElement('div');
-                card.className = `news-card ${item.severity}`;
-                card.innerHTML = `
-                    <a href="${item.url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;">
-                        <div class="news-title">${item.title}</div>
-                        <div class="news-meta">
-                            <span class="news-badge badge-${item.severity}">${item.severity}</span>
-                            ${item.source} • ${item.date}
-                        </div>
-                        <div class="news-excerpt">${item.excerpt}</div>
-                        <div style="margin-top:12px;color:#00d4ff;font-size:0.85rem;">Read more →</div>
-                    </a>
-                `;
-                newsGrid.appendChild(card);
-            });
+            fetch('/api/cyber_news')
+                .then(res => res.json())
+                .then(data => {
+                    const newsGrid = document.getElementById('news-grid');
+                    if (!newsGrid) return;
+                    
+                    if (!data.newsItems || data.newsItems.length === 0) {
+                        newsGrid.innerHTML = '<p style="color:#888;">No cyber news available yet.</p>';
+                        return;
+                    }
+                    
+                    newsGrid.innerHTML = '';
+                    data.newsItems.forEach(item => {
+                        const severityKey = String(item.severity || '').toLowerCase();
+                        const card = document.createElement('div');
+                        card.className = `news-card ${escHtml(severityKey)}`;
+
+                        const link = document.createElement('a');
+                        link.href = item.url || '#';
+                        link.target = '_blank';
+                        link.rel = 'noopener';
+                        link.style.cssText = 'text-decoration:none;color:inherit;';
+
+                        const title = document.createElement('div');
+                        title.className = 'news-title';
+                        title.textContent = item.headline || '';
+
+                        const meta = document.createElement('div');
+                        meta.className = 'news-meta';
+                        const badge = document.createElement('span');
+                        badge.className = `news-badge badge-${escHtml(severityKey)}`;
+                        badge.textContent = item.severity || '';
+                        meta.appendChild(badge);
+                        meta.appendChild(document.createTextNode(` ${item.source || ''} • ${item.date || ''}`));
+
+                        const excerpt = document.createElement('div');
+                        excerpt.className = 'news-excerpt';
+                        excerpt.textContent = item.summary || '';
+
+                        const readMore = document.createElement('div');
+                        readMore.style.cssText = 'margin-top:12px;color:#00d4ff;font-size:0.85rem;';
+                        readMore.textContent = 'Read more →';
+
+                        link.append(title, meta, excerpt, readMore);
+                        card.appendChild(link);
+                        newsGrid.appendChild(card);
+                    });
+                    
+                    // Update status subtitle if present
+                    if (data.status) {
+                        const statusEl = document.querySelector('.cybernews-subtitle');
+                        if (statusEl) statusEl.textContent = data.status;
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load cyber news:', err);
+                    const newsGrid = document.getElementById('news-grid');
+                    if (newsGrid) newsGrid.innerHTML = '<p style="color:#888;">Failed to load cyber news.</p>';
+                });
         }
 
         // Load email protection data
@@ -694,11 +1303,13 @@
         }
 
         function updateEmailProtection(data) {
-            // Update stats
-            document.getElementById('email-total').textContent = data.total_scanned || 0;
-            document.getElementById('email-clean').textContent = data.clean_count || 0;
-            document.getElementById('email-junk').textContent = data.junk_count || 0;
-            document.getElementById('email-flagged').textContent = data.flagged_count || 0;
+            // Update stats — prefer dashboard summary (present when coming from /api/email_scans
+            // or the POST /api/email_scan), fall back to legacy top-level fields.
+            const dash = data.dashboard || {};
+            document.getElementById('email-total').textContent = dash.totalScanned ?? data.total_scanned ?? 0;
+            document.getElementById('email-clean').textContent = dash.clean ?? data.clean_count ?? 0;
+            document.getElementById('email-junk').textContent = dash.byRisk?.MEDIUM ?? data.junk_count ?? 0;
+            document.getElementById('email-flagged').textContent = dash.flagged ?? data.flagged_count ?? data.flagged ?? 0;
             
             // Update scam type breakdown
             const scamTypes = {
@@ -719,14 +1330,15 @@
             
             for (const [type, count] of Object.entries(data.scam_type_counts || {})) {
                 if (count > 0) {
-                    const row = document.createElement('tr');
                     const config = scamTypes[type] || { weight: 0, description: "Unknown" };
-                    row.innerHTML = `
-                        <td><span class="news-badge badge-high">${type.replace(/_/g, ' ')}</span></td>
-                        <td>${count}</td>
-                        <td>${config.weight}</td>
-                        <td>${config.description}</td>
-                    `;
+                    const row = document.createElement('tr');
+                    const cells = [
+                        (() => { const td = document.createElement('td'); const sp = document.createElement('span'); sp.className = 'news-badge badge-high'; sp.textContent = type.replace(/_/g, ' '); td.appendChild(sp); return td; })(),
+                        (() => { const td = document.createElement('td'); td.textContent = count; return td; })(),
+                        (() => { const td = document.createElement('td'); td.textContent = config.weight; return td; })(),
+                        (() => { const td = document.createElement('td'); td.textContent = config.description; return td; })(),
+                    ];
+                    cells.forEach(td => row.appendChild(td));
                     tbody.appendChild(row);
                 }
             }
@@ -747,15 +1359,12 @@
             
             legitEmails.forEach(email => {
                 const row = document.createElement('tr');
-                
-                row.innerHTML = `
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.subject}</td>
-                    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.sender}</td>
-                    <td>${email.risk_score}</td>
-                    <td><span class="news-badge badge-low">${email.risk_level}</span></td>
-                    <td>${formatDate(email.received_date || email.timestamp)}</td>
-                    <td><button onclick="viewEmail('${email.account}', '${email.message_id}')" style="background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;">👁️ View</button></td>
-                `;
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.subject || '', style: 'max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.sender || '', style: 'max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.risk_score ?? '' }));
+                const badgeTd = document.createElement('td'); const badge = document.createElement('span'); badge.className = 'news-badge badge-low'; badge.textContent = email.risk_level || ''; badgeTd.appendChild(badge); row.appendChild(badgeTd);
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: formatDate(email.received_date || email.timestamp) }));
+                const btnTd = document.createElement('td'); const btn = document.createElement('button'); btn.textContent = '👁️ View'; btn.style.cssText = 'background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;'; btn.onclick = () => viewEmail(email.account, email.message_id); btnTd.appendChild(btn); row.appendChild(btnTd);
                 legitTbody.appendChild(row);
             });
             
@@ -769,15 +1378,12 @@
             
             junkEmails.forEach(email => {
                 const row = document.createElement('tr');
-                
-                row.innerHTML = `
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.subject}</td>
-                    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.sender}</td>
-                    <td>${email.risk_score}</td>
-                    <td><span class="news-badge badge-medium">${email.risk_level}</span></td>
-                    <td>${formatDate(email.received_date || email.timestamp)}</td>
-                    <td><button onclick="viewEmail('${email.account}', '${email.message_id}')" style="background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;">👁️ View</button></td>
-                `;
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.subject || '', style: 'max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.sender || '', style: 'max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.risk_score ?? '' }));
+                const badgeTd = document.createElement('td'); const badge = document.createElement('span'); badge.className = 'news-badge badge-medium'; badge.textContent = email.risk_level || ''; badgeTd.appendChild(badge); row.appendChild(badgeTd);
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: formatDate(email.received_date || email.timestamp) }));
+                const btnTd = document.createElement('td'); const btn = document.createElement('button'); btn.textContent = '👁️ View'; btn.style.cssText = 'background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;'; btn.onclick = () => viewEmail(email.account, email.message_id); btnTd.appendChild(btn); row.appendChild(btnTd);
                 junkTbody.appendChild(row);
             });
             
@@ -792,16 +1398,26 @@
             flaggedEmails.forEach(email => {
                 const row = document.createElement('tr');
                 const riskClass = email.risk_level === 'CRITICAL' ? 'badge-critical' : 'badge-high';
-                
-                row.innerHTML = `
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.subject}</td>
-                    <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${email.sender}</td>
-                    <td>${email.classifications.map(c => `<span class="news-badge badge-medium" style="margin:2px;">${c.type.replace(/_/g, ' ')}</span>`).join('')}</td>
-                    <td>${email.risk_score}</td>
-                    <td><span class="news-badge ${riskClass}">${email.risk_level}</span></td>
-                    <td>${formatDate(email.received_date || email.timestamp)}</td>
-                    <td><button onclick="viewEmail('${email.account}', '${email.message_id}')" style="background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;">👁️ View</button></td>
-                `;
+
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.subject || '', style: 'max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.sender || '', style: 'max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+
+                // Classifications: handle both string[] and {type:string}[] formats
+                const classifTd = document.createElement('td');
+                (email.classifications || []).forEach(c => {
+                    const label = typeof c === 'string' ? c : (c.type || '');
+                    const sp = document.createElement('span');
+                    sp.className = 'news-badge badge-medium';
+                    sp.style.margin = '2px';
+                    sp.textContent = label.replace(/_/g, ' ');
+                    classifTd.appendChild(sp);
+                });
+                row.appendChild(classifTd);
+
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: email.risk_score ?? '' }));
+                const riskTd = document.createElement('td'); const riskBadge = document.createElement('span'); riskBadge.className = `news-badge ${riskClass}`; riskBadge.textContent = email.risk_level || ''; riskTd.appendChild(riskBadge); row.appendChild(riskTd);
+                row.appendChild(Object.assign(document.createElement('td'), { textContent: formatDate(email.received_date || email.timestamp) }));
+                const btnTd = document.createElement('td'); const btn = document.createElement('button'); btn.textContent = '👁️ View'; btn.style.cssText = 'background:#00d4ff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;color:#1a1a2e;font-size:0.85rem;'; btn.onclick = () => viewEmail(email.account, email.message_id); btnTd.appendChild(btn); row.appendChild(btnTd);
                 emailTbody.appendChild(row);
             });
             
@@ -819,7 +1435,7 @@
             btn.disabled = true;
             
             try {
-                const response = await fetch('/api/email_scan');
+                const response = await fetch('/api/email_scan', { method: 'POST' });
                 const data = await response.json();
                 updateEmailProtection(data);
             } catch (error) {
@@ -1251,11 +1867,18 @@
                 const fromEmail = data.from?.emailAddress?.address || data.from?.address || (data.from || '');
                 const date = data.received_date || data.date || '';
                 
-                document.getElementById('viewer-meta').innerHTML = `
-                    <strong>From:</strong> ${fromName} (${fromEmail})<br>
-                    <strong>Date:</strong> ${date ? new Date(date).toLocaleString() : 'Unknown'}<br>
-                    <strong>Account:</strong> ${account}
-                `;
+                const metaEl = document.getElementById('viewer-meta');
+                metaEl.innerHTML = '';
+                const addMetaLine = (label, value) => {
+                    const strong = document.createElement('strong');
+                    strong.textContent = label;
+                    metaEl.appendChild(strong);
+                    metaEl.appendChild(document.createTextNode(' ' + value));
+                    metaEl.appendChild(document.createElement('br'));
+                };
+                addMetaLine('From:', `${fromName} (${fromEmail})`);
+                addMetaLine('Date:', date ? new Date(date).toLocaleString() : 'Unknown');
+                addMetaLine('Account:', account);
                 
                 // Show body content - prefer plain text, fall back to HTML
                 const body = data.body || data.html_body || 'No content available';
@@ -1298,22 +1921,25 @@
             
             if (newDevices.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No new devices in the last 24 hours</td></tr>';
+                setSectionStatus('status-newdevices', 'good', 'GOOD — No new devices in last 24h');
+            } else {
+                setSectionStatus('status-newdevices', 'warning', `WARNING — ${newDevices.length} new device(s) discovered`);
             }
         }
 
         function initChart() {
-            const ctx = document.getElementById('historyChart').getContext('2d');
-            historyChart = new Chart(ctx, {
-                type: 'line',
+            const ctx = document.getElementById('combinedChart').getContext('2d');
+            combinedChart = new Chart(ctx, {
+                type: 'bar',
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'Online Devices',
+                        type: 'bar',
+                        label: 'Total Devices',
                         data: [],
+                        backgroundColor: 'rgba(52, 199, 89, 0.6)',
                         borderColor: '#34c759',
-                        backgroundColor: 'rgba(52, 199, 89, 0.1)',
-                        fill: true,
-                        tension: 0.4
+                        borderWidth: 1
                     }]
                 },
                 options: {
@@ -1322,15 +1948,29 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: 'Device Count Over Time'
+                            text: 'Total Devices - Last 7 Days'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
                         }
                     },
                     scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
                             }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Device Count'
+                            },
+                            beginAtZero: true
                         }
                     }
                 }
@@ -1368,18 +2008,25 @@
             });
         }
 
-        function updateChart(history) {
-            if (!history || history.length === 0) return;
+        function updateCombinedChart(deviceCounts) {
+            if (!deviceCounts || deviceCounts.length === 0) {
+                console.log('No device counts data');
+                return;
+            }
 
-            const labels = history.map(h => {
-                const date = new Date(h.timestamp);
-                return date.toLocaleTimeString();
+            const labels = deviceCounts.map(d => {
+                const date = new Date(d.day);
+                return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
             });
-            const data = history.map(h => h.online);
 
-            historyChart.data.labels = labels;
-            historyChart.data.datasets[0].data = data;
-            historyChart.update();
+            const data = deviceCounts.map(d => d.device_count || 0);
+
+            console.log('Device counts chart:', labels.length, 'days');
+            console.log('  Data:', data);
+
+            combinedChart.data.labels = labels;
+            combinedChart.data.datasets[0].data = data;
+            combinedChart.update();
         }
 
         function formatDate(isoString) {
@@ -1394,26 +2041,2036 @@
 
         async function refreshData() {
             try {
-                const response = await fetch('/api/scan');
+                const response = await fetch('/api/devices');
                 const devices = await response.json();
                 updateStats(devices);
                 updateTable(devices);
                 updateLastUpdate();
 
-                const historyResponse = await fetch('/api/history');
-                const history = await historyResponse.json();
-                updateChart(history);
+                const deviceCountsResponse = await fetch('/api/device_counts');
+                const deviceCounts = await deviceCountsResponse.json();
+                updateCombinedChart(deviceCounts);
+
+                // Home status — check for offline devices
+                const offlineDevices = devices.filter(d => d.status !== 'online');
+                if (offlineDevices.length === 0) {
+                    setSectionStatus('status-home', 'good', `GOOD — All ${devices.length} device(s) online`);
+                } else {
+                    setSectionStatus('status-home', 'warning', `WARNING — ${offlineDevices.length} device(s) offline`);
+                }
             } catch (error) {
                 console.error('Error fetching data:', error);
+                setSectionStatus('status-home', 'warning', 'WARNING — Could not load device data');
+            }
+        }
+
+        // ── Firewall ──────────────────────────────────────────────────────────
+
+        let _firewallInterval = null;
+
+        function startFirewallMonitor() {
+            loadFirewall();
+            _firewallInterval = setInterval(loadFirewall, 30000);
+        }
+
+        function stopFirewallMonitor() {
+            if (_firewallInterval) {
+                clearInterval(_firewallInterval);
+                _firewallInterval = null;
+            }
+        }
+
+        // Vulnerability definitions for open ports
+        const PORT_VULNS = {
+            21: { risk: 'CRITICAL', service: 'FTP', why: 'Sends credentials in plaintext. Easy to intercept.',
+                steps: [
+                    { os: 'macOS', title: 'Disable FTP', instructions: ['Open System Settings → General → Sharing', 'Turn OFF "File Sharing" if not needed, or check FTP is not enabled', 'Or run in Terminal: sudo launchctl unload -w /System/Library/LaunchDaemons/ftp.plist'] },
+                    { os: 'Windows', title: 'Disable FTP', instructions: ['Open Control Panel → Programs → Turn Windows features on or off', 'Expand "Internet Information Services" → "FTP Server"', 'Uncheck FTP Server and click OK'] },
+                    { os: 'Router', title: 'Block at Router', instructions: ['Log into your router (usually http://192.168.1.1)', 'Go to Firewall / Port Filtering', 'Add a rule to BLOCK port 21 inbound and outbound'] },
+                    { os: 'Alternative', title: 'Use SFTP instead', instructions: ['SFTP (SSH File Transfer) is encrypted and secure', 'macOS: Enable SSH in System Settings → Sharing → Remote Login', 'Use FileZilla or Cyberduck with SFTP (port 22)'] },
+                ]
+            },
+            22: { risk: 'MEDIUM', service: 'SSH', why: 'Brute-force target if exposed externally.',
+                steps: [
+                    { os: 'macOS', title: 'Restrict SSH Access', instructions: ['Open System Settings → General → Sharing → Remote Login', 'Change "Allow access for" to specific users only', 'Or disable entirely if you don\'t need remote access'] },
+                    { os: 'Terminal', title: 'Enable Key-Based Auth Only', instructions: ['Edit /etc/ssh/sshd_config', 'Set: PasswordAuthentication no', 'Set: PermitRootLogin no', 'Run: sudo systemctl restart ssh (Linux) or sudo launchctl restart com.openssh.sshd (macOS)'] },
+                    { os: 'Router', title: 'Don\'t Forward Port 22', instructions: ['In your router settings, make sure port 22 is NOT forwarded externally', 'SSH should only be accessible from your local network or via VPN'] },
+                ]
+            },
+            23: { risk: 'CRITICAL', service: 'Telnet', why: 'Fully unencrypted. Anyone on the network can sniff traffic.',
+                steps: [
+                    { os: 'macOS', title: 'Disable Telnet', instructions: ['Run in Terminal: sudo launchctl unload -w /System/Library/LaunchDaemons/telnet.plist', 'Telnet is disabled by default on modern macOS'] },
+                    { os: 'Windows', title: 'Disable Telnet', instructions: ['Open Control Panel → Programs → Turn Windows features on or off', 'Uncheck "Telnet Client" and "Telnet Server"', 'Click OK and restart if prompted'] },
+                    { os: 'Router/Switch', title: 'Disable on Network Devices', instructions: ['Log into your router admin panel', 'Find Management / Remote Access settings', 'Ensure Telnet is disabled and SSH is used instead'] },
+                ]
+            },
+            25: { risk: 'HIGH', service: 'SMTP', why: 'Open relay can be abused to send spam.',
+                steps: [
+                    { os: 'macOS', title: 'Disable Postfix (mail server)', instructions: ['Run: sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.postfix.master.plist', 'This stops the local mail relay'] },
+                    { os: 'Router', title: 'Block Port 25 at Router', instructions: ['Log into your router at http://192.168.1.1', 'Go to Firewall → Outbound / Port Filtering', 'Block port 25 — most home ISPs block this anyway'] },
+                ]
+            },
+            80: { risk: 'LOW', service: 'HTTP', why: 'Unencrypted web traffic.',
+                steps: [
+                    { os: 'macOS', title: 'Stop Apache / Web Server', instructions: ['Run: sudo apachectl stop', 'To prevent auto-start: sudo launchctl unload -w /System/Library/LaunchDaemons/org.apache.httpd.plist'] },
+                    { os: 'General', title: 'Upgrade to HTTPS', instructions: ['If running a web server, get a free SSL cert from Let\'s Encrypt (https://letsencrypt.org)', 'Redirect all HTTP traffic to HTTPS (port 443)', 'Update your web server config to use TLS'] },
+                ]
+            },
+            443: { risk: 'SAFE', service: 'HTTPS', why: 'Standard encrypted web traffic. Generally safe.',
+                steps: [
+                    { os: 'Info', title: 'Port 443 is Normal', instructions: ['HTTPS (port 443) is the standard for secure web browsing', 'This port is expected to be open if you run a web server', 'No action needed unless you don\'t run a web server — then stop the service'] },
+                ]
+            },
+            445: { risk: 'CRITICAL', service: 'SMB', why: 'EternalBlue / WannaCry. One of the most exploited ports ever.',
+                steps: [
+                    { os: 'macOS', title: 'Disable SMB File Sharing', instructions: ['Open System Settings → General → Sharing', 'Turn OFF "File Sharing"', 'Or in Terminal: sudo launchctl unload -w /System/Library/LaunchDaemons/com.apple.smbd.plist'] },
+                    { os: 'Windows', title: 'Disable SMBv1', instructions: ['Open PowerShell as Admin', 'Run: Set-SmbServerConfiguration -EnableSMB1Protocol $false', 'In Control Panel → Windows Features, uncheck "SMB 1.0/CIFS File Sharing Support"'] },
+                    { os: 'Router', title: 'Block Port 445 at Router', instructions: ['This is critical — SMB should NEVER be exposed to the internet', 'Log into router → Firewall → Block inbound port 445', 'Also block port 139 (NetBIOS)'] },
+                ]
+            },
+            3306: { risk: 'CRITICAL', service: 'MySQL', why: 'Database directly reachable. Credential brute-force target.',
+                steps: [
+                    { os: 'MySQL Config', title: 'Bind to Localhost Only', instructions: ['Edit /etc/mysql/mysql.conf.d/mysqld.cnf (Linux) or /usr/local/etc/my.cnf (macOS)', 'Set: bind-address = 127.0.0.1', 'Restart MySQL: brew services restart mysql (macOS) or sudo systemctl restart mysql (Linux)'] },
+                    { os: 'macOS (Homebrew)', title: 'Stop MySQL if Not Needed', instructions: ['Run: brew services stop mysql', 'Or: sudo mysql.server stop'] },
+                ]
+            },
+            3389: { risk: 'CRITICAL', service: 'RDP', why: 'Ransomware entry point #1.',
+                steps: [
+                    { os: 'Windows', title: 'Disable RDP', instructions: ['Open System Properties → Remote tab', 'Select "Don\'t allow remote connections to this computer"', 'Or in PowerShell: Set-ItemProperty -Path "HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server" -Name fDenyTSConnections -Value 1'] },
+                    { os: 'Windows', title: 'If You Need RDP', instructions: ['Enable Network Level Authentication (NLA)', 'Change RDP to a non-standard port', 'Use a VPN — never expose RDP directly to the internet', 'Enable Windows Firewall to restrict RDP to known IPs'] },
+                ]
+            },
+            5900: { risk: 'HIGH', service: 'VNC', why: 'Remote desktop with weak auth.',
+                steps: [
+                    { os: 'macOS', title: 'Disable Screen Sharing / VNC', instructions: ['Open System Settings → General → Sharing', 'Turn OFF "Screen Sharing"', 'This disables VNC (port 5900)'] },
+                    { os: 'If Needed', title: 'Secure VNC', instructions: ['Use a strong password (12+ characters)', 'Access VNC only over VPN — never expose port 5900 to the internet', 'Consider using Tailscale for secure remote access instead'] },
+                ]
+            },
+            8080: { risk: 'LOW', service: 'HTTP Alt', why: 'Often exposes admin panels.',
+                steps: [
+                    { os: 'General', title: 'Stop the Service on Port 8080', instructions: ['Find what\'s using port 8080: sudo lsof -i :8080', 'Identify the process and stop it if unneeded', 'If it\'s a dev server (Node, Python, etc.) make sure it\'s not running in production'] },
+                ]
+            },
+            4444: { risk: 'CRITICAL', service: 'Metasploit / Malware', why: 'Default reverse shell port.',
+                steps: [
+                    { os: 'URGENT', title: 'Investigate Immediately', instructions: ['Port 4444 open may indicate malware — act immediately', 'Run: sudo lsof -i :4444 to see what process is using it', 'If unknown process: kill it immediately with: sudo kill -9 <PID>', 'Run a malware scan: Malwarebytes (free) or macOS built-in XProtect', 'Consider resetting your machine if infection is confirmed'] },
+                ]
+            },
+        };
+
+        function togglePortInstructions(rowId) {
+            const el = document.getElementById(rowId + '-instructions');
+            if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+        }
+
+        const RISK_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3, SAFE: 4 };
+        const RISK_COLORS = { CRITICAL: '#ff4757', HIGH: '#ffa502', MEDIUM: '#ffdd59', LOW: '#00ff88', SAFE: '#888' };
+        const RISK_BADGE = {
+            CRITICAL: 'badge-critical',
+            HIGH:     'badge-high',
+            MEDIUM:   'badge-medium',
+            LOW:      'badge-low',
+        };
+
+        async function loadFirewall() {
+            try {
+                const data = await fetchJSON('/api/network_firewall');
+
+                // Summary cards
+                document.getElementById('fw-gateway').textContent = data.gateway || '—';
+                document.getElementById('fw-ext-count').textContent = data.external_count ?? '—';
+
+                const flaggedEl = document.getElementById('fw-flagged-count');
+                flaggedEl.textContent = data.flagged_count ?? '—';
+                flaggedEl.style.color = data.flagged_count > 0 ? '#ff4757' : '#00ff88';
+
+                document.getElementById('fw-port-count').textContent = data.open_port_count ?? '—';
+
+                // ── Vulnerability analysis ────────────────────────────────────
+                const ports = data.open_ports || [];
+                const vulns = [];
+
+                for (const p of ports) {
+                    const def = PORT_VULNS[p.port];
+                    if (def) {
+                        vulns.push({ port: p.port, address: p.address, ...def });
+                    } else if (p.suspicious) {
+                        vulns.push({ port: p.port, address: p.address, risk: 'HIGH', service: p.service || 'Unknown', why: 'Flagged as potentially risky port.', fix: 'Investigate and close if not needed.' });
+                    }
+                }
+                vulns.sort((a, b) => (RISK_ORDER[a.risk] ?? 9) - (RISK_ORDER[b.risk] ?? 9));
+
+                const vulnCount = vulns.filter(v => v.risk === 'CRITICAL' || v.risk === 'HIGH').length;
+                const vulnEl = document.getElementById('fw-vuln-count');
+                vulnEl.textContent = vulnCount;
+                vulnEl.style.color = vulnCount > 0 ? '#ff4757' : '#00ff88';
+
+                // Vulnerability banner
+                const banner = document.getElementById('fw-vuln-banner');
+                const vulnList = document.getElementById('fw-vuln-list');
+                const criticalVulns = vulns.filter(v => v.risk === 'CRITICAL' || v.risk === 'HIGH');
+                if (criticalVulns.length > 0) {
+                    banner.style.display = 'block';
+                    vulnList.innerHTML = criticalVulns.map(v =>
+                        `• <strong>Port ${v.port} (${v.service})</strong> — ${v.why}`
+                    ).join('<br>');
+                } else {
+                    banner.style.display = 'none';
+                }
+
+                // Vulnerability report table
+                const vulnWrap = document.getElementById('fw-vuln-table-wrap');
+                if (vulns.length === 0) {
+                    vulnWrap.innerHTML = '<div style="padding:12px;color:#00ff88;">✅ No known vulnerable ports detected</div>';
+                } else {
+                    vulnWrap.innerHTML = `<table>
+                        <thead><tr>
+                            <th>Port</th><th>Risk</th><th>Service</th><th>Why It's Dangerous</th><th>Instructions</th>
+                        </tr></thead>
+                        <tbody>${vulns.map((v, i) => {
+                            const def = PORT_VULNS[v.port];
+                            const hasSteps = def && def.steps && def.steps.length > 0;
+                            const rowId = 'fw-vuln-row-' + i;
+                            const btn = hasSteps
+                                ? `<button onclick="togglePortInstructions('${rowId}')" style="background:#1a1a4a;border:1px solid #00d4ff;color:#00d4ff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;">📋 How to Fix</button>`
+                                : '<span style="color:#888;font-size:0.82rem;">See Open Ports below</span>';
+                            const color = RISK_COLORS[v.risk] || '#eee';
+                            const mainRow = `<tr id="${rowId}-main" style="background:rgba(${v.risk==='CRITICAL'?'255,71,87':v.risk==='HIGH'?'255,165,2':'255,221,89'},0.06);">
+                                <td style="font-family:monospace;font-weight:700;color:${color};">${v.port}</td>
+                                <td><span class="news-badge ${RISK_BADGE[v.risk] || ''}">${v.risk}</span></td>
+                                <td style="color:#eee;font-weight:600;">${v.service}</td>
+                                <td style="color:#ccc;font-size:0.85rem;">${v.why}</td>
+                                <td>${btn}</td>
+                            </tr>`;
+                            const instrRow = hasSteps ? `<tr id="${rowId}-instructions" style="display:none;">
+                                <td colspan="5" style="padding:0;">
+                                    <div style="background:#0d1226;border-left:3px solid ${color};padding:20px 24px;">
+                                        <div style="font-size:1rem;font-weight:700;color:${color};margin-bottom:16px;">📋 How to Fix: ${v.service} (Port ${v.port})</div>
+                                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+                                            ${def.steps.map(s => `
+                                            <div style="background:#16213e;border-radius:8px;padding:16px;border-top:2px solid ${color}40;">
+                                                <div style="font-weight:600;color:#eee;margin-bottom:10px;font-size:0.9rem;">
+                                                    <span style="background:${color}20;color:${color};padding:2px 8px;border-radius:4px;font-size:0.75rem;margin-right:8px;">${s.os}</span>${s.title}
+                                                </div>
+                                                <ol style="color:#ccc;font-size:0.83rem;line-height:1.9;padding-left:18px;">
+                                                    ${s.instructions.map(step => `<li>${step}</li>`).join('')}
+                                                </ol>
+                                            </div>`).join('')}
+                                        </div>
+                                        <div style="margin-top:14px;text-align:right;">
+                                            <button onclick="togglePortInstructions('${rowId}')" style="background:none;border:1px solid #444;color:#888;padding:4px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;">✕ Close</button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>` : '';
+                            return mainRow + instrRow;
+                        }).join('')}</tbody>
+                    </table>`;
+                }
+
+                // ── Open ports table ──────────────────────────────────────────
+                const portsTbody = document.getElementById('fw-ports-table');
+                if (ports.length === 0) {
+                    portsTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No open ports found</td></tr>';
+                } else {
+                    portsTbody.innerHTML = ports.map((p, i) => {
+                        const def = PORT_VULNS[p.port];
+                        const risk = def ? def.risk : (p.suspicious ? 'HIGH' : 'SAFE');
+                        const service = def ? def.service : (p.service || '—');
+                        const why = def ? def.why : (p.suspicious ? 'Flagged port' : 'No known risk');
+                        const color = RISK_COLORS[risk] || '#888';
+                        const badge = def || p.suspicious
+                            ? `<span class="news-badge ${RISK_BADGE[risk] || ''}">${risk}</span>`
+                            : `<span style="color:#888;font-size:0.85rem;">✅ Safe</span>`;
+                        const hasInstructions = def && def.steps && def.steps.length > 0;
+                        const rowId = `fw-port-row-${i}`;
+                        const instructBtn = hasInstructions
+                            ? `<button onclick="togglePortInstructions('${rowId}')" style="background:#1a1a4a;border:1px solid #00d4ff;color:#00d4ff;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;white-space:nowrap;">📋 How to Fix</button>`
+                            : '';
+                        const rowBg = def||p.suspicious ? `background:rgba(${risk==='CRITICAL'?'255,71,87':risk==='HIGH'?'255,165,2':'255,221,89'},0.06);` : '';
+                        const mainRow = `<tr style="${rowBg}" id="${rowId}-main">
+                            <td style="font-family:monospace;font-weight:700;color:${color};">${p.port}</td>
+                            <td>${badge}</td>
+                            <td style="color:#eee;">${service}</td>
+                            <td style="color:#888;font-size:0.82rem;">${why}</td>
+                            <td>${instructBtn}</td>
+                        </tr>`;
+                        const instructRow = hasInstructions ? `<tr id="${rowId}-instructions" style="display:none;">
+                            <td colspan="5" style="padding:0;">
+                                <div style="background:#0d1226;border-left:3px solid ${color};padding:20px 24px;margin:0;">
+                                    <div style="font-size:1rem;font-weight:700;color:${color};margin-bottom:16px;">📋 How to Fix: ${service} (Port ${p.port})</div>
+                                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+                                        ${def.steps.map(s => `
+                                        <div style="background:#16213e;border-radius:8px;padding:16px;border-top:2px solid ${color}40;">
+                                            <div style="font-weight:600;color:#eee;margin-bottom:10px;font-size:0.9rem;">
+                                                <span style="background:${color}20;color:${color};padding:2px 8px;border-radius:4px;font-size:0.75rem;margin-right:8px;">${s.os}</span>
+                                                ${s.title}
+                                            </div>
+                                            <ol style="color:#ccc;font-size:0.83rem;line-height:1.9;padding-left:18px;">
+                                                ${s.instructions.map(step => `<li style="margin-bottom:2px;">${step.includes(':') && (step.includes('Run') || step.includes('Set') || step.includes('Edit')) ? step.replace(/([:]\s*)(.+)$/, (m, sep, cmd) => `${sep}<code style="background:#0a0f1e;color:#00d4ff;padding:1px 6px;border-radius:3px;font-size:0.82rem;">${cmd}</code>`) : step}</li>`).join('')}
+                                            </ol>
+                                        </div>`).join('')}
+                                    </div>
+                                    <div style="margin-top:14px;text-align:right;">
+                                        <button onclick="togglePortInstructions('${rowId}')" style="background:none;border:1px solid #444;color:#888;padding:4px 14px;border-radius:6px;cursor:pointer;font-size:0.8rem;">✕ Close</button>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>` : '';
+                        return mainRow + instructRow;
+                    }).join('');
+                }
+
+                // ── External connections table ────────────────────────────────
+                const extTbody = document.getElementById('fw-ext-table');
+                const conns = data.external_connections || [];
+                if (conns.length === 0) {
+                    extTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No external connections found</td></tr>';
+                } else {
+                    extTbody.innerHTML = conns.map(c => {
+                        let badge, rowStyle = '';
+                        if (c.flag) {
+                            badge = '<span class="news-badge badge-high">⚠️ SUSPICIOUS</span>';
+                            rowStyle = 'background:rgba(255,71,87,0.08);';
+                        } else if (c.known_good) {
+                            badge = '<span class="news-badge badge-low">✅ Known</span>';
+                        } else {
+                            badge = '<span class="news-badge" style="background:#2a2a4a;color:#ccc;">🔵 Unknown</span>';
+                        }
+                        const portLabel = c.suspicious_port_name
+                            ? `<span style="color:#ffa502;">${c.foreign_port} (${c.suspicious_port_name})</span>`
+                            : c.foreign_port;
+                        return `<tr style="${rowStyle}">
+                            <td>${badge}</td>
+                            <td style="font-family:monospace;font-size:0.85rem;">${c.foreign_ip}</td>
+                            <td>${portLabel}</td>
+                            <td style="color:#888;font-size:0.82rem;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.hostname || '—'}</td>
+                            <td style="font-family:monospace;font-size:0.82rem;color:#666;">${c.local}</td>
+                        </tr>`;
+                    }).join('');
+                }
+
+                document.getElementById('fw-last-update').textContent =
+                    '🔄 Auto-refreshing every 30s — Last updated: ' + new Date().toLocaleTimeString();
+
+                // Status bar
+                const fwIsGood = criticalVulns.length === 0 && (data.flagged_count ?? 0) === 0;
+                if (criticalVulns.length > 0) {
+                    setSectionStatus('status-firewall', 'alert', `ALERT — ${criticalVulns.length} vulnerable port(s) detected`);
+                } else if ((data.flagged_count ?? 0) > 0) {
+                    setSectionStatus('status-firewall', 'warning', `WARNING — ${data.flagged_count} suspicious connection(s)`);
+                } else {
+                    setSectionStatus('status-firewall', 'good', 'GOOD — No vulnerabilities detected');
+                }
+
+            } catch (err) {
+                console.error('Failed to load firewall data:', err);
+                setSectionStatus('status-firewall', 'warning', 'WARNING — Could not load firewall data');
+                const extTbody = document.getElementById('fw-ext-table');
+                if (extTbody) extTbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff4757;">Failed to load — ' + err.message + '</td></tr>';
+            }
+        }
+
+        // ── Firewall widget (home dashboard) ─────────────────────────────────
+
+        async function refreshFirewallWidget() {
+            const dot = document.getElementById('fw-widget-dot');
+            if (dot) { dot.style.color = '#ffa502'; dot.title = 'Updating…'; }
+            try {
+                const data = await fetchJSON('/api/network_firewall');
+
+                set('fw-w-gateway', data.gateway || '—');
+                set('fw-w-ext', data.external_count ?? '—');
+
+                const flaggedEl = document.getElementById('fw-w-flagged');
+                if (flaggedEl) {
+                    flaggedEl.textContent = data.flagged_count ?? '—';
+                    flaggedEl.style.color = data.flagged_count > 0 ? '#ff4757' : '#00ff88';
+                }
+
+                const portsEl = document.getElementById('fw-w-ports');
+                if (portsEl) {
+                    const suspicious = (data.open_ports || []).filter(p => p.suspicious).length;
+                    portsEl.textContent = data.open_port_count ?? '—';
+                    portsEl.style.color = suspicious > 0 ? '#ffa502' : '#eee';
+                }
+
+                // Alert box
+                const alertEl = document.getElementById('fw-w-alert');
+                if (alertEl) {
+                    const msgs = [];
+                    if (data.flagged_count > 0) msgs.push(`⚠️ ${data.flagged_count} suspicious connection(s) detected on your network`);
+                    const suspPorts = (data.open_ports || []).filter(p => p.suspicious);
+                    if (suspPorts.length > 0) msgs.push(`🚪 Risky ports open: ${suspPorts.map(p => p.service || p.port).join(', ')}`);
+                    if (msgs.length > 0) {
+                        alertEl.innerHTML = msgs.join('<br>');
+                        alertEl.style.display = 'block';
+                    } else {
+                        alertEl.style.display = 'none';
+                    }
+                }
+
+                if (dot) { dot.style.color = '#00ff88'; dot.title = 'Live'; }
+                const updEl = document.getElementById('fw-w-updated');
+                if (updEl) updEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+            } catch (err) {
+                console.error('Firewall widget error:', err);
+                if (dot) { dot.style.color = '#ff4757'; dot.title = 'Error'; }
+            }
+        }
+
+        async function triggerAiReset() {
+            if (!confirm('Reset billing period now? This will zero out all session token counts.')) return;
+            try {
+                await fetch('/api/ai_reset', {method: 'POST'});
+                await loadAiUsage();
+            } catch (err) {
+                alert('Reset failed: ' + err.message);
+            }
+        }
+
+        async function loadAiUsage() {
+            try {
+                const data = await fetch('/api/ai_usage').then(r => r.json());
+                const sessions = data.sessions || [];
+
+                // Summary cards — one per agent (pick highest-token session per agent)
+                const byAgent = {};
+                for (const s of sessions) {
+                    if (s.totalTokens == null) continue;
+                    const prev = byAgent[s.agentId];
+                    if (!prev || s.totalTokens > prev.totalTokens) byAgent[s.agentId] = s;
+                }
+
+                // Current model table
+                const agentConfigs = data.agents || [];
+                const agentsTableEl = document.getElementById('ai-agents-table');
+                if (agentConfigs.length === 0) {
+                    agentsTableEl.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#888;">No agent config available.</td></tr>';
+                } else {
+                    agentsTableEl.innerHTML = agentConfigs.map(a =>
+                        `<tr><td><strong>${a.name}</strong></td><td style="font-family:monospace;font-size:0.85rem;">${a.model}</td></tr>`
+                    ).join('');
+                }
+
+                const cardsEl = document.getElementById('ai-usage-cards');
+                const agents = Object.values(byAgent).sort((a, b) => (b.totalTokens / b.contextTokens) - (a.totalTokens / a.contextTokens));
+                if (agents.length === 0) {
+                    cardsEl.innerHTML = '<p style="color:#888;">No usage data available.</p>';
+                } else {
+                    cardsEl.innerHTML = agents.map(s => {
+                        const pct = s.contextTokens ? Math.round(s.totalTokens / s.contextTokens * 100) : 0;
+                        const usedK = Math.round(s.totalTokens / 1000);
+                        const ctxK = Math.round(s.contextTokens / 1000);
+                        const color = pct >= 80 ? '#ff4757' : pct >= 50 ? '#ffa502' : '#00ff88';
+                        return `<div class="stat-card">
+                            <div class="stat-number" style="font-size:1.5rem;color:${color};">${pct}%</div>
+                            <div class="stat-label">${s.agentId.charAt(0).toUpperCase() + s.agentId.slice(1)}</div>
+                            <div style="margin-top:8px;background:#1a2a1a;border-radius:4px;height:6px;overflow:hidden;">
+                                <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;"></div>
+                            </div>
+                            <div style="font-size:0.75rem;color:#888;margin-top:6px;">${usedK}k / ${ctxK}k tokens</div>
+                        </div>`;
+                    }).join('');
+                }
+
+                // Detail table — all sessions with token data
+                const tableEl = document.getElementById('ai-usage-table');
+                const rows = sessions.filter(s => s.totalTokens != null).sort((a, b) => {
+                    const pa = a.totalTokens / a.contextTokens;
+                    const pb = b.totalTokens / b.contextTokens;
+                    return pb - pa;
+                });
+                const nextReset = data.next_reset
+                    ? new Date(data.next_reset + 'T00:00:00').toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})
+                    : '—';
+                if (rows.length === 0) {
+                    tableEl.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">No data</td></tr>';
+                } else {
+                    tableEl.innerHTML = rows.map(s => {
+                        const pct = s.contextTokens ? Math.round(s.totalTokens / s.contextTokens * 100) : 0;
+                        const usedK = Math.round(s.totalTokens / 1000);
+                        const ctxK = Math.round(s.contextTokens / 1000);
+                        const remK = ctxK - usedK;
+                        const color = pct >= 80 ? '#ff4757' : pct >= 50 ? '#ffa502' : '#00ff88';
+                        const sessionLabel = s.key.replace(/^agent:[^:]+:/, '').replace(/:run:.*$/, '');
+                        const bar = `<div style="display:flex;align-items:center;gap:8px;">
+                            <div style="flex:1;background:#1a2a1a;border-radius:3px;height:8px;overflow:hidden;min-width:80px;">
+                                <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;"></div>
+                            </div>
+                            <span style="color:${color};font-size:0.85rem;">${pct}%</span>
+                        </div>`;
+                        return `<tr>
+                            <td style="font-size:0.8rem;color:#aaa;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${s.key}">${sessionLabel}</td>
+                            <td style="font-size:0.8rem;">${s.model}</td>
+                            <td style="color:#00d4ff;">${usedK}k</td>
+                            <td>${ctxK}k</td>
+                            <td style="color:#888;">${remK}k</td>
+                            <td style="min-width:140px;">${bar}</td>
+                            <td style="font-size:0.8rem;color:#aaa;white-space:nowrap;">${nextReset}</td>
+                        </tr>`;
+                    }).join('');
+                }
+
+                // Billing table
+                const billingRows = data.billing || [];
+                const billingEl = document.getElementById('ai-billing-table');
+                if (billingRows.length === 0) {
+                    billingEl.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">No billing data.</td></tr>';
+                } else {
+                    const totalCost = billingRows.reduce((sum, r) => sum + r.cost, 0);
+                    const fmt = n => n < 0.001 ? `$${(n * 100).toFixed(4)}¢` : `$${n.toFixed(4)}`;
+                    const fmtTok = n => n >= 1000000 ? `${(n/1000000).toFixed(2)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}k` : String(n);
+                    billingEl.innerHTML = billingRows.map(r => {
+                        const isFree = r.cost === 0;
+                        return `<tr>
+                            <td style="font-family:monospace;font-size:0.85rem;">${r.model}</td>
+                            <td style="color:#aaa;">${fmtTok(r.inputTokens)}</td>
+                            <td style="color:#aaa;">${fmtTok(r.outputTokens)}</td>
+                            <td style="color:${isFree ? '#888' : '#00d4ff'};">${isFree ? '—' : fmt(r.cost)}</td>
+                        </tr>`;
+                    }).join('') + `<tr style="border-top:1px solid #333;font-weight:700;">
+                        <td colspan="3" style="text-align:right;padding-right:12px;">Total</td>
+                        <td style="color:#00ff88;">${fmt(totalCost)}</td>
+                    </tr>`;
+                }
+
+                document.getElementById('ai-last-update').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+            } catch (err) {
+                console.error('AI usage error:', err);
+                document.getElementById('ai-usage-table').innerHTML =
+                    '<tr><td colspan="6" style="text-align:center;color:#ff4757;">Failed to load data</td></tr>';
+            }
+        }
+
+        async function loadLlm() {
+            try {
+                const data = await fetchJSON('/api/llm');
+                const litellm = data.litellm || {};
+                const ollama = data.ollama || {};
+
+                const litellmOnline = litellm.status === 'online';
+                const ollamaOnline = ollama.status === 'online';
+                const litellmModels = litellm.models || [];
+                const ollamaModels = ollama.models || [];
+                const running = ollama.running || [];
+
+                // ── Stat cards ─────────────────────────────────────────────
+                document.getElementById('llm-stat-cards').innerHTML = `
+                    <div class="stat-card ${litellmOnline ? 'online' : 'offline'}">
+                        <div class="stat-number">${litellmOnline ? '✓' : '✗'}</div>
+                        <div class="stat-label">LiteLLM Proxy</div>
+                    </div>
+                    <div class="stat-card ${ollamaOnline ? 'online' : 'offline'}">
+                        <div class="stat-number">${ollamaOnline ? '✓' : '✗'}</div>
+                        <div class="stat-label">Ollama</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${litellmModels.length}</div>
+                        <div class="stat-label">LiteLLM Models</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${ollamaModels.length}</div>
+                        <div class="stat-label">Ollama Models</div>
+                    </div>
+                    <div class="stat-card ${running.length > 0 ? 'online' : ''}">
+                        <div class="stat-number">${running.length}</div>
+                        <div class="stat-label">Running</div>
+                    </div>
+                `;
+
+                // ── LiteLLM models table ────────────────────────────────────
+                const providerOf = name => {
+                    if (name.startsWith('claude')) return 'Anthropic';
+                    if (name.startsWith('gemini')) return 'Google';
+                    return 'Ollama';
+                };
+                const litellmEl = document.getElementById('llm-litellm-table');
+                if (!litellmOnline) {
+                    litellmEl.innerHTML = `<tr><td colspan="2" style="text-align:center;color:#ff4757;">Proxy offline — ${escHtml(litellm.error || 'unreachable')}</td></tr>`;
+                } else if (litellmModels.length === 0) {
+                    litellmEl.innerHTML = '<tr><td colspan="2" style="text-align:center;color:#888;">No models</td></tr>';
+                } else {
+                    litellmEl.innerHTML = litellmModels.map(name => `<tr>
+                        <td style="font-family:monospace;font-size:0.85rem;">${escHtml(name)}</td>
+                        <td><span class="status-badge" style="background:rgba(0,212,255,0.15);color:#00d4ff;">${escHtml(providerOf(name))}</span></td>
+                    </tr>`).join('');
+                }
+
+                // ── Ollama models table ─────────────────────────────────────
+                const fmtSize = bytes => {
+                    if (!bytes) return '—';
+                    const gb = bytes / 1e9;
+                    return gb >= 1 ? `${gb.toFixed(1)} GB` : `${(bytes / 1e6).toFixed(0)} MB`;
+                };
+                const fmtDate = iso => {
+                    if (!iso) return '—';
+                    try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
+                };
+                const ollamaEl = document.getElementById('llm-ollama-table');
+                if (!ollamaOnline) {
+                    ollamaEl.innerHTML = `<tr><td colspan="3" style="text-align:center;color:#ff4757;">Ollama offline — ${escHtml(ollama.error || 'unreachable')}</td></tr>`;
+                } else if (ollamaModels.length === 0) {
+                    ollamaEl.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#888;">No local models</td></tr>';
+                } else {
+                    ollamaEl.innerHTML = ollamaModels.map(m => `<tr>
+                        <td style="font-family:monospace;font-size:0.85rem;">${escHtml(m.name)}</td>
+                        <td style="color:#aaa;">${fmtSize(m.size)}</td>
+                        <td style="color:#666;font-size:0.8rem;">${fmtDate(m.modified_at)}</td>
+                    </tr>`).join('');
+                }
+
+                // ── Running models table ────────────────────────────────────
+                const runningEl = document.getElementById('llm-running-table');
+                if (running.length === 0) {
+                    runningEl.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">No models currently loaded</td></tr>';
+                } else {
+                    const fmtExpiry = iso => {
+                        if (!iso) return '—';
+                        try {
+                            const d = new Date(iso);
+                            const diffMs = d - Date.now();
+                            if (diffMs <= 0) return 'expired';
+                            const diffMin = Math.round(diffMs / 60000);
+                            return diffMin < 60 ? `${diffMin}m` : `${Math.round(diffMin / 60)}h`;
+                        } catch { return iso; }
+                    };
+                    runningEl.innerHTML = running.map(m => `<tr>
+                        <td style="font-family:monospace;font-size:0.85rem;">${escHtml(m.name)}</td>
+                        <td style="color:#aaa;">${fmtSize(m.size)}</td>
+                        <td style="color:#aaa;">${fmtSize(m.size_vram)}</td>
+                        <td style="color:#00ff88;font-size:0.85rem;">${fmtExpiry(m.until)}</td>
+                    </tr>`).join('');
+                }
+
+                document.getElementById('llm-last-update').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+
+                // Status bar (theft check happens async — set provisional status now)
+                if (!litellmOnline || !ollamaOnline) {
+                    const down = [!litellmOnline && 'LiteLLM', !ollamaOnline && 'Ollama'].filter(Boolean).join(', ');
+                    setSectionStatus('status-llm', 'alert', `ALERT — ${down} offline`);
+                } else {
+                    setSectionStatus('status-llm', 'good', 'GOOD — All services online');
+                }
+
+                loadLlmTheft();
+                loadWatermarkStatus();
+            } catch (err) {
+                console.error('LLM tab error:', err);
+                setSectionStatus('status-llm', 'warning', 'WARNING — Could not load LLM data');
+                document.getElementById('llm-stat-cards').innerHTML =
+                    `<p style="color:#ff4757;">Failed to load: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        async function loadLlmTheft() {
+            try {
+                const d = await fetchJSON('/api/llm/theft');
+                const p = d.protections || {};
+                const spend = d.spend || {};
+                const theftStatus  = d.theft_status  || 'PASS';
+                const theftReasons = d.theft_reasons || [];
+                const pattern      = d.pattern_detection || {};
+                const isFail       = theftStatus.startsWith('FAIL');
+                const isHighVol    = theftReasons.includes('High Volume');
+                const isUnusual    = theftReasons.includes('Unusual Query Patterns');
+
+                // ── Alert banner (top of section) ───────────────────────────
+                const alertEl    = document.getElementById('llm-theft-alert');
+                const alertTitle = document.getElementById('llm-theft-alert-title');
+                const alertReasons = document.getElementById('llm-theft-alert-reasons');
+                if (isFail) {
+                    alertEl.style.display = 'block';
+                    alertTitle.textContent = theftStatus;
+                    const reasonLines = [];
+                    if (isHighVol) {
+                        const w = (d.query_rate?.warnings || [])[0];
+                        reasonLines.push(`High Volume: ${w ? w.message : 'burst threshold exceeded'}`);
+                    }
+                    if (isUnusual && pattern.details) {
+                        pattern.details.forEach(det => reasonLines.push(`Unusual Pattern: ${det}`));
+                    }
+                    alertReasons.innerHTML = reasonLines.map(r => `<div>• ${escHtml(r)}</div>`).join('');
+                } else {
+                    alertEl.style.display = 'none';
+                }
+
+                // ── Nav badge ───────────────────────────────────────────────
+                const navLlm = document.getElementById('nav-llm');
+                if (navLlm) {
+                    navLlm.style.color = isFail ? '#ff4757' : '';
+                    navLlm.title = isFail ? `MODEL THEFT DETECTED: ${theftStatus}` : '';
+                }
+
+                // ── Update LLM status bar with theft result ──────────────────
+                if (isFail) {
+                    setSectionStatus('status-llm', 'alert', `ALERT — Model theft detected: ${theftStatus}`);
+                }
+                // (if PASS, leave the "GOOD — All services online" set by loadLlm)
+
+                // ── Protection stat cards (+ overall theft status card) ─────
+                const checks = [
+                    { label: 'Theft Detection', ok: !isFail,
+                      icon: isFail ? '🚨' : '✓',
+                      highlight: true },
+                    { label: 'IP Restriction',  ok: p.ip_restriction?.enabled },
+                    { label: 'Budget Cap',       ok: p.budget_cap?.enabled },
+                    { label: 'Rate Limit',       ok: p.rate_limit?.enabled },
+                    { label: 'Auth Required',    ok: p.auth_required?.enabled },
+                ];
+                document.getElementById('llm-theft-cards').innerHTML = checks.map(c => `
+                    <div class="stat-card ${c.ok ? 'online' : 'offline'}" ${c.highlight && isFail ? 'style="border-color:#ff4757;box-shadow:0 0 10px rgba(255,71,87,0.35);"' : ''}>
+                        <div class="stat-number">${c.icon || (c.ok ? '✓' : '✗')}</div>
+                        <div class="stat-label">${escHtml(c.label)}</div>
+                    </div>`).join('');
+
+                // ── Spend progress bar ──────────────────────────────────────
+                const barWrap = document.getElementById('llm-spend-bar-wrap');
+                if (spend.error) {
+                    barWrap.innerHTML = `<p style="color:#888;font-size:0.85rem;">Spend data unavailable: ${escHtml(spend.error)}</p>`;
+                } else if (spend.current !== null) {
+                    const pct = Math.min((spend.pct || 0) * 100, 100);
+                    const barColor = pct >= 95 ? '#ff4757' : pct >= 75 ? '#ffa502' : '#00ff88';
+                    barWrap.innerHTML = `
+                        <div style="margin-bottom:6px;display:flex;justify-content:space-between;font-size:0.85rem;">
+                            <span style="color:#ccc;">Monthly Spend</span>
+                            <span style="color:${barColor};font-weight:600;">$${spend.current.toFixed(2)} / $${spend.budget.toFixed(2)} (${pct.toFixed(1)}%)</span>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:8px;overflow:hidden;">
+                            <div style="width:${pct}%;height:100%;background:${barColor};border-radius:4px;transition:width 0.4s;"></div>
+                        </div>`;
+                } else {
+                    barWrap.innerHTML = '';
+                }
+
+                // ── Protection details table ────────────────────────────────
+                const volStatus = isHighVol
+                    ? 'FAIL: HIGH VOLUME'
+                    : (d.query_rate?.warnings?.length > 0 ? 'WARNING' : 'OK');
+                const volValue = isHighVol
+                    ? (d.query_rate?.warnings || []).map(w => w.message).join('; ')
+                    : `${d.query_rate?.total?.last_60s ?? 0} queries/min`;
+
+                const patternFlags = (pattern.flags || []);
+                const patternStatus = isUnusual
+                    ? `FAIL: ${patternFlags.map(f => ({
+                        same_model_repeat: 'Repetitive Probing',
+                        model_enumeration: 'Model Enumeration',
+                        uniform_timing:    'Bot-like Timing',
+                    }[f] || f)).join(' + ')}`
+                    : 'OK';
+                const patternValue = isUnusual
+                    ? (pattern.details || []).join(' | ')
+                    : `${pattern.queries_analysed ?? 0} queries analysed — no anomalies`;
+
+                const rows = [
+                    {
+                        name: 'High Volume Detection',
+                        value: volValue,
+                        ok: !isHighVol,
+                        status: volStatus,
+                    },
+                    {
+                        name: 'Unusual Query Patterns',
+                        value: patternValue,
+                        ok: !isUnusual,
+                        status: patternStatus,
+                    },
+                    {
+                        name: 'IP Allowlist',
+                        value: p.ip_restriction?.enabled
+                            ? (p.ip_restriction.allowed_ips || []).join(', ')
+                            : 'Not configured',
+                        ok: p.ip_restriction?.enabled,
+                        status: p.ip_restriction?.enabled ? 'Active' : 'Missing',
+                    },
+                    {
+                        name: 'Monthly Budget Cap',
+                        value: p.budget_cap?.enabled
+                            ? `$${p.budget_cap.amount} / ${p.budget_cap.duration}`
+                            : 'Not configured',
+                        ok: p.budget_cap?.enabled,
+                        status: p.budget_cap?.enabled ? 'Active' : 'Missing',
+                    },
+                    {
+                        name: 'Rate Limit',
+                        value: p.rate_limit?.enabled
+                            ? `${p.rate_limit.rpm} RPM`
+                            : 'Not configured',
+                        ok: p.rate_limit?.enabled,
+                        status: p.rate_limit?.enabled ? 'Active' : 'Missing',
+                    },
+                    {
+                        name: 'Auth (master key)',
+                        value: p.auth_required?.enabled ? 'Enabled' : 'DISABLED',
+                        ok: p.auth_required?.enabled,
+                        status: p.auth_required?.enabled ? 'Active' : 'Missing',
+                    },
+                ];
+                document.getElementById('llm-theft-table').innerHTML = rows.map(r => `<tr>
+                    <td>${escHtml(r.name)}</td>
+                    <td style="font-family:monospace;font-size:0.82rem;color:#ccc;max-width:340px;word-break:break-word;">${escHtml(r.value)}</td>
+                    <td><span class="status-badge" style="background:${r.ok ? 'rgba(0,255,136,0.15)' : 'rgba(255,71,87,0.15)'};color:${r.ok ? '#00ff88' : '#ff4757'};">${escHtml(r.status)}</span></td>
+                </tr>`).join('');
+
+                // ── Threat Occurrences line (immediately below the table) ───
+                const occurrences = d.threat_occurrences ?? 0;
+                const occLineEl = document.getElementById('llm-threat-occurrences');
+                if (occLineEl) {
+                    occLineEl.textContent = occurrences;
+                    occLineEl.style.color = occurrences > 0 ? '#ff4757' : '#00ff88';
+                }
+
+                // ── Burst warnings ──────────────────────────────────────────
+                const qr = d.query_rate || {};
+                const burstWarnings = qr.warnings || [];
+                const burstWrap = document.getElementById('llm-burst-warn-wrap');
+                if (burstWarnings.length > 0) {
+                    burstWrap.innerHTML = burstWarnings.map(w => {
+                        const col = w.severity === 'critical' ? '#ff4757' : '#ffa502';
+                        const top3 = w.models.slice(0, 3).map(m =>
+                            `<span style="margin-left:8px;font-size:0.75rem;color:#aaa;font-family:monospace;">${escHtml(m.model)} ×${m.count}</span>`
+                        ).join('');
+                        return `<div style="background:rgba(255,71,87,0.08);border:1px solid ${col};border-radius:5px;padding:8px 12px;margin-bottom:6px;">
+                            <span style="color:${col};font-weight:600;">⚠ Burst</span>
+                            <span style="color:#ccc;margin-left:8px;font-size:0.85rem;">${escHtml(w.message)}</span>
+                            ${top3}
+                        </div>`;
+                    }).join('');
+                } else {
+                    burstWrap.innerHTML = '';
+                }
+
+                // ── Auto-kill panel ─────────────────────────────────────────
+                const ak = d.autokill || {};
+                const akEnabled = ak.enabled || false;
+                const akTriggered = ak.triggered || null;
+                const akWrap = document.getElementById('llm-autokill-wrap');
+
+                let akHtml = `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:12px 16px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;${akTriggered ? 'margin-bottom:10px;' : ''}">
+                        <div>
+                            <span style="font-weight:600;color:#ccc;">Auto-Kill</span>
+                            <span style="margin-left:10px;font-size:0.78rem;padding:2px 8px;border-radius:3px;${akEnabled ? 'background:rgba(255,71,87,0.15);color:#ff4757;' : 'background:rgba(255,255,255,0.08);color:#888;'}">
+                                ${akEnabled ? '🔴 ARMED' : '○ Disarmed'}
+                            </span>
+                            <span style="margin-left:10px;font-size:0.75rem;color:#666;">Kills LiteLLM on burst detection</span>
+                        </div>
+                        <button onclick="toggleAutokill(${akEnabled})" style="font-size:0.8rem;padding:5px 12px;border-radius:4px;border:1px solid ${akEnabled ? '#ff4757' : '#00ff88'};background:transparent;color:${akEnabled ? '#ff4757' : '#00ff88'};cursor:pointer;">
+                            ${akEnabled ? 'Disarm' : 'Arm'}
+                        </button>
+                    </div>`;
+
+                if (akTriggered) {
+                    const triggeredAt = new Date(akTriggered.triggered_at).toLocaleTimeString();
+                    akHtml += `<div style="background:rgba(255,71,87,0.1);border:1px solid #ff4757;border-radius:4px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <span style="color:#ff4757;font-weight:600;">🔴 LiteLLM killed</span>
+                            <span style="color:#ccc;font-size:0.8rem;margin-left:8px;">${escHtml(triggeredAt)} — ${escHtml(String(akTriggered.count))} queries in ${escHtml(String(akTriggered.window_seconds))}s</span>
+                        </div>
+                        <button onclick="restoreLitellm()" style="font-size:0.8rem;padding:5px 12px;border-radius:4px;border:1px solid #00ff88;background:transparent;color:#00ff88;cursor:pointer;">
+                            ▶ Restore
+                        </button>
+                    </div>`;
+                }
+
+                akHtml += '</div>';
+                akWrap.innerHTML = akHtml;
+
+                // ── Threat Summary footer cards ─────────────────────────────
+                const occEl   = document.getElementById('threat-occurrences-val');
+                const lastEl  = document.getElementById('threat-last-reason-val');
+                const curEl   = document.getElementById('threat-current-status-val');
+                const cardEl2 = document.getElementById('threat-counter-card');
+                if (occEl)  occEl.textContent  = occurrences;
+                if (lastEl) lastEl.textContent = theftReasons.length ? theftReasons.join(' + ') : 'None';
+                if (curEl) {
+                    curEl.textContent  = isFail ? theftStatus : 'PASS';
+                    curEl.style.color  = isFail ? '#ff4757' : '#00ff88';
+                }
+                if (cardEl2) {
+                    cardEl2.className = 'stat-card ' + (occurrences > 0 ? 'offline' : 'online');
+                    if (occurrences > 0)
+                        cardEl2.style.cssText = 'padding:18px;text-align:center;border-color:#ff4757;box-shadow:0 0 12px rgba(255,71,87,0.25);';
+                    else
+                        cardEl2.style.cssText = 'padding:18px;text-align:center;';
+                }
+
+                // ── Home dashboard theft widget ─────────────────────────────
+                _updateTheftWidget(theftStatus, isHighVol, isUnusual, theftReasons);
+
+            } catch (err) {
+                console.error('Theft prevention load error:', err);
+                document.getElementById('llm-theft-cards').innerHTML =
+                    `<p style="color:#ff4757;">Failed to load: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        function _updateTheftWidget(theftStatus, isHighVol, isUnusual, theftReasons) {
+            const isFail   = theftStatus.startsWith('FAIL');
+            const dotEl    = document.getElementById('theft-widget-dot');
+            const statusEl = document.getElementById('theft-w-status');
+            const volEl    = document.getElementById('theft-w-volume');
+            const patEl    = document.getElementById('theft-w-patterns');
+            const cardEl   = document.getElementById('theft-w-status-card');
+            const alertEl  = document.getElementById('theft-w-alert');
+            const updEl    = document.getElementById('theft-w-updated');
+
+            if (!statusEl) return;
+
+            if (dotEl) { dotEl.style.color = isFail ? '#ff4757' : '#00ff88'; dotEl.textContent = '●'; }
+            if (updEl)  updEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+            statusEl.textContent = isFail ? '✗' : '✓';
+            if (cardEl) {
+                cardEl.className = 'stat-card ' + (isFail ? 'offline' : 'online');
+                cardEl.style.cssText = isFail
+                    ? 'padding:14px;border-color:#ff4757;box-shadow:0 0 12px rgba(255,71,87,0.3);'
+                    : 'padding:14px;';
+            }
+
+            if (volEl)  volEl.textContent  = isHighVol  ? '🚨' : '✓';
+            if (patEl)  patEl.textContent  = isUnusual  ? '🚨' : '✓';
+
+            if (alertEl) {
+                if (isFail) {
+                    alertEl.style.display = 'block';
+                    alertEl.innerHTML = `<strong>MODEL THEFT DETECTED:</strong> ${escHtml(theftStatus.replace('FAIL: ', ''))}` +
+                        (theftReasons.length
+                            ? ` — triggered by: <strong>${theftReasons.map(escHtml).join(' + ')}</strong>`
+                            : '');
+                } else {
+                    alertEl.style.display = 'none';
+                }
+            }
+        }
+
+        async function toggleAutokill(currentlyEnabled) {
+            const action = currentlyEnabled ? 'disable' : 'enable';
+            try {
+                const r = await fetch('/api/llm/autokill', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action}),
+                });
+                const data = await r.json();
+                if (data.ok) loadLlmTheft();
+            } catch (err) {
+                alert('Failed to toggle auto-kill: ' + err.message);
+            }
+        }
+
+        async function restoreLitellm() {
+            try {
+                const r = await fetch('/api/llm/autokill', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'restore'}),
+                });
+                const data = await r.json();
+                if (data.ok) loadLlmTheft();
+                else alert('Restore failed: ' + (data.error || 'unknown error'));
+            } catch (err) {
+                alert('Failed to restore LiteLLM: ' + err.message);
+            }
+        }
+
+        async function verifyWatermark() {
+            const text = document.getElementById('wm-input').value.trim();
+            const resultEl = document.getElementById('wm-result');
+            if (!text) { resultEl.innerHTML = '<p style="color:#888;">Paste some text first.</p>'; return; }
+            resultEl.innerHTML = '<p style="color:#888;font-size:0.85rem;">Checking…</p>';
+            try {
+                const r = await fetch('/api/llm/watermark/verify', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({text}),
+                });
+                const d = await r.json();
+                if (d.error) { resultEl.innerHTML = `<p style="color:#ff4757;">${escHtml(d.error)}</p>`; return; }
+
+                const wb = d.whitebox || {};
+                const bb = d.blackbox || {};
+
+                // ── White-box result ──────────────────────────────────────
+                const wbOk   = wb.found && wb.valid;
+                const wbCol  = wbOk ? '#00ff88' : wb.found ? '#ffa502' : '#888';
+                const wbIcon = wbOk ? '✓' : wb.found ? '!' : '–';
+                const wbLabel = wbOk
+                    ? `Valid — model: <code style="color:#00d4ff;">${escHtml(wb.model_id || wb.model_byte)}</code>`
+                    : wb.found ? 'Markers found but HMAC invalid (wrong key or tampered)'
+                    : escHtml(wb.reason || 'No markers found');
+
+                // ── Black-box result ──────────────────────────────────────
+                const bbOk   = bb.watermark_suspected;
+                const bbCol  = bb.key_verified === true ? '#00ff88'
+                             : bbOk             ? '#ffa502'
+                             : '#888';
+                const bbIcon = bb.key_verified === true ? '✓' : bbOk ? '~' : '–';
+                const bbPct  = bb.detectable ? `${(bb.formal_ratio * 100).toFixed(1)}% formal` : '—';
+                const bbLabel = !bb.detectable ? escHtml(bb.reason || 'Not enough substitutable words')
+                    : bb.key_verified === true ? `Verified (${bbPct}, match rate ${(bb.key_match_rate * 100).toFixed(0)}%)`
+                    : bbOk ? `Suspected — ${bbPct} (baseline ~35%), confidence: ${escHtml(bb.confidence)}`
+                    : `Not detected — ${bbPct} (within natural range)`;
+
+                resultEl.innerHTML = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:5px;padding:12px;">
+                            <div style="font-weight:600;color:#ccc;margin-bottom:6px;">White-box (steganographic)</div>
+                            <div style="font-size:1.4rem;color:${wbCol};font-weight:700;margin-bottom:4px;">${wbIcon}</div>
+                            <div style="font-size:0.82rem;color:#aaa;">${wbLabel}</div>
+                            ${wb.markers ? `<div style="font-size:0.75rem;color:#666;margin-top:4px;">${wb.markers} marker chars found</div>` : ''}
+                        </div>
+                        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:5px;padding:12px;">
+                            <div style="font-weight:600;color:#ccc;margin-bottom:6px;">Black-box (statistical)</div>
+                            <div style="font-size:1.4rem;color:${bbCol};font-weight:700;margin-bottom:4px;">${bbIcon}</div>
+                            <div style="font-size:0.82rem;color:#aaa;">${bbLabel}</div>
+                            ${bb.detectable ? `<div style="font-size:0.75rem;color:#666;margin-top:4px;">${bb.substitutable} substitutable words</div>` : ''}
+                        </div>
+                    </div>`;
+            } catch (err) {
+                resultEl.innerHTML = `<p style="color:#ff4757;">Error: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        async function loadWatermarkStatus() {
+            const cardsEl = document.getElementById('wm-status-cards');
+            const probeEl = document.getElementById('wm-probe-wrap');
+            if (!cardsEl) return;
+            cardsEl.innerHTML = '<p style="color:#888;font-size:0.85rem;">Running probe…</p>';
+            try {
+                const d = await fetchJSON('/api/llm/watermark/status');
+
+                // ── Config stat cards ────────────────────────────────────────
+                const cards = [
+                    { label: 'Secret Key',   ok: d.secret_configured,    val: d.secret_configured    ? 'Configured' : 'Missing'   },
+                    { label: 'Callback',     ok: d.callback_registered,  val: d.callback_registered  ? 'Registered' : 'Not found' },
+                    { label: 'White-box WM', ok: d.whitebox_enabled,     val: d.whitebox_enabled     ? 'Active'     : 'Inactive'  },
+                    { label: 'Black-box WM', ok: d.blackbox_enabled,     val: d.blackbox_enabled     ? 'Active'     : 'Inactive'  },
+                ];
+                cardsEl.innerHTML = cards.map(c => `
+                    <div class="stat-card ${c.ok ? 'online' : 'offline'}">
+                        <div class="stat-number" style="font-size:1.1rem;">${c.ok ? '✓' : '✗'}</div>
+                        <div class="stat-label">${escHtml(c.label)}</div>
+                        <div style="font-size:0.72rem;color:${c.ok ? '#00ff88' : '#ff4757'};margin-top:2px;">${escHtml(c.val)}</div>
+                    </div>`).join('');
+
+                // ── Live probe result ────────────────────────────────────────
+                const p = d.probe || {};
+                if (!p.tested) {
+                    probeEl.innerHTML = p.error
+                        ? `<p style="color:#ff4757;font-size:0.82rem;">Probe error: ${escHtml(p.error)}</p>`
+                        : `<p style="color:#888;font-size:0.82rem;">Live probe skipped (LiteLLM offline or no secret).</p>`;
+                } else {
+                    const wbOk  = p.whitebox_detected;
+                    const bbOk  = p.blackbox_key_verified;
+                    const wbCol = wbOk ? '#00ff88' : '#ff4757';
+                    const bbCol = bbOk === true ? '#00ff88' : bbOk === false ? '#ffa502' : '#888';
+
+                    probeEl.innerHTML = `
+                        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:12px 16px;">
+                            <div style="font-size:0.78rem;color:#888;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">Live probe · model: <code style="color:#00d4ff;">${escHtml(p.model_used || '—')}</code></div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                                <div>
+                                    <span style="font-weight:600;color:${wbCol};">${wbOk ? '✓' : '✗'} White-box</span>
+                                    <div style="font-size:0.8rem;color:#aaa;margin-top:3px;">
+                                        ${wbOk
+                                            ? `${p.whitebox_markers} markers · model: <code style="color:#00d4ff;">${escHtml(p.whitebox_model || '?')}</code>`
+                                            : 'No valid markers found'}
+                                    </div>
+                                </div>
+                                <div>
+                                    <span style="font-weight:600;color:${bbCol};">${bbOk === true ? '✓' : bbOk === false ? '~' : '–'} Black-box</span>
+                                    <div style="font-size:0.8rem;color:#aaa;margin-top:3px;">
+                                        ${p.blackbox_ratio !== null
+                                            ? `Formality: ${(p.blackbox_ratio * 100).toFixed(1)}%${bbOk === true ? ' · key verified' : ''}`
+                                            : 'Too few substitutable words'}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                }
+            } catch (err) {
+                cardsEl.innerHTML = `<p style="color:#ff4757;font-size:0.85rem;">Failed: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        async function loadWifiStatus() {
+            try {
+                const data = await fetchJSON('/api/wifi_networks');
+                const connMap = { "Active": "up", "Limited": "limited", "No Connectivity": "down" };
+                const networks = data.connected ? [{
+                    ssid: data.connected.ssid,
+                    ip: data.connected.ip,
+                    interface: data.connected.interface,
+                    connectivity: connMap[data.connected.connectivity] || "down",
+                    gateway: data.connected.gateway
+                }] : (data.networks || []);
+
+                const upCount = networks.filter(n => n.connectivity === 'up').length;
+                const limitedCount = networks.filter(n => n.connectivity === 'limited').length;
+                const downCount = networks.filter(n => n.connectivity === 'down').length;
+
+                document.getElementById('wifi-stat-cards').innerHTML = `
+                    <div class="stat-card ${upCount > 0 ? 'online' : ''}">
+                        <div class="stat-number">${upCount}</div>
+                        <div class="stat-label">Connected</div>
+                    </div>
+                    <div class="stat-card ${limitedCount > 0 ? '' : ''}">
+                        <div class="stat-number">${limitedCount}</div>
+                        <div class="stat-label">Limited</div>
+                    </div>
+                    <div class="stat-card ${downCount > 0 ? 'offline' : ''}">
+                        <div class="stat-number">${downCount}</div>
+                        <div class="stat-label">Down</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${networks.length}</div>
+                        <div class="stat-label">Interfaces</div>
+                    </div>
+                `;
+
+                const connectivityBadge = c => {
+                    if (c === 'up')      return `<span class="status-badge" style="background:rgba(0,230,118,0.15);color:#00e676;">Up</span>`;
+                    if (c === 'limited') return `<span class="status-badge" style="background:rgba(255,171,0,0.15);color:#ffab00;">Limited</span>`;
+                    return `<span class="status-badge" style="background:rgba(255,71,87,0.15);color:#ff4757;">Down</span>`;
+                };
+
+                const tableEl = document.getElementById('wifi-networks-table');
+                if (networks.length === 0) {
+                    tableEl.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">No WiFi interfaces detected</td></tr>';
+                } else {
+                    tableEl.innerHTML = networks.map(n => `<tr>
+                        <td>${escHtml(n.ssid || '—')}</td>
+                        <td style="font-family:monospace;">${escHtml(n.ip || '—')}</td>
+                        <td style="font-family:monospace;font-size:0.8rem;color:#aaa;">${escHtml(n.interface || '—')}</td>
+                        <td>${connectivityBadge(n.connectivity)}</td>
+                        <td style="font-family:monospace;">${escHtml(n.gateway || '—')}</td>
+                    </tr>`).join('');
+                }
+
+                document.getElementById('wifi-last-update').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+
+                // Status bar
+                if (downCount > 0 && upCount === 0) {
+                    setSectionStatus('status-wifistatus', 'alert', 'ALERT — No active network connectivity');
+                } else if (limitedCount > 0 || downCount > 0) {
+                    setSectionStatus('status-wifistatus', 'warning', `WARNING — ${downCount} interface(s) down, ${limitedCount} limited`);
+                } else if (upCount > 0) {
+                    setSectionStatus('status-wifistatus', 'good', `GOOD — ${upCount} interface(s) connected`);
+                } else {
+                    setSectionStatus('status-wifistatus', 'warning', 'WARNING — No interfaces detected');
+                }
+
+            } catch (err) {
+                console.error('WiFi Status tab error:', err);
+                setSectionStatus('status-wifistatus', 'warning', 'WARNING — Could not load WiFi data');
+                document.getElementById('wifi-stat-cards').innerHTML =
+                    `<p style="color:#ff4757;">Failed to load: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        // ── LLM Output Fingerprinting ───────────────────────────────────────────
+        async function loadFingerprinting() {
+            setSectionStatus('status-fingerprinting', 'loading', '⏳ Loading…');
+            try {
+                const data = await fetchJSON('/api/llm_fingerprint/threat_status');
+                const threats = data.threats || [];
+                const total   = data.total || 0;
+                const active  = threats.filter(t => t.count > 0).length;
+
+                document.getElementById('fp-total').textContent  = total;
+                document.getElementById('fp-active').textContent = active;
+
+                const lastUpdated = data.last_updated
+                    ? new Date(data.last_updated).toLocaleString()
+                    : '—';
+                document.getElementById('fp-last-seen').textContent = lastUpdated;
+
+                // Cache names for mitigate callback
+                window._fpThreats = threats;
+
+                const tbody = document.getElementById('fp-tbody');
+                if (threats.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;padding:20px;">No fingerprint data yet.</td></tr>';
+                } else {
+                    tbody.innerHTML = threats.map((t, i) => {
+                        const hasEvents = t.count > 0;
+                        const countColor = hasEvents ? '#ff4757' : '#00ff88';
+                        const desc = hasEvents
+                            ? escHtml(t.what_happened || '—')
+                            : '<span style="color:#555;">—</span>';
+                        const mitigateBtn = hasEvents
+                            ? `<button onclick="mitigateFp(${i})"
+                                style="padding:4px 10px;font-size:0.78rem;background:rgba(255,71,87,0.15);color:#ff4757;border:1px solid #ff475740;border-radius:4px;cursor:pointer;">
+                                Mitigate
+                               </button>`
+                            : '—';
+                        return `<tr style="border-bottom:1px solid #2a2a2a;">
+                            <td style="padding:10px 12px;font-size:0.88rem;">${escHtml(t.name)}</td>
+                            <td style="padding:10px 12px;text-align:center;font-weight:700;color:${countColor};">${t.count}</td>
+                            <td style="padding:10px 12px;font-family:monospace;font-size:0.8rem;color:#aaa;">${escHtml(t.last_model || '—')}</td>
+                            <td style="padding:10px 12px;font-size:0.82rem;color:#ccc;max-width:320px;word-break:break-word;">${desc}</td>
+                            <td style="padding:10px 12px;text-align:center;">${mitigateBtn}</td>
+                        </tr>`;
+                    }).join('');
+                }
+
+                const refreshedAt = new Date().toLocaleString();
+                document.getElementById('fp-last-update').textContent = 'Last refreshed: ' + refreshedAt;
+
+                if (total === 0) {
+                    setSectionStatus('status-fingerprinting', 'good', 'GOOD — No fingerprint threat events recorded');
+                } else if (active >= 3) {
+                    setSectionStatus('status-fingerprinting', 'alert', `ALERT — ${active} active threat type(s), ${total} total event(s)`);
+                } else {
+                    setSectionStatus('status-fingerprinting', 'warning', `WARNING — ${active} active threat type(s), ${total} total event(s)`);
+                }
+            } catch (err) {
+                console.error('Fingerprinting load error:', err);
+                setSectionStatus('status-fingerprinting', 'warning', 'WARNING — Could not load fingerprint data');
+            }
+        }
+
+        async function mitigateFp(idx) {
+            const threats = window._fpThreats || [];
+            const threatName = threats[idx] && threats[idx].name;
+            if (!threatName) return;
+            try {
+                const res = await fetch('/api/llm_fingerprint/mitigate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: threatName }),
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    loadFingerprinting();
+                } else {
+                    alert('Mitigate failed: ' + (data.error || 'unknown error'));
+                }
+            } catch (err) {
+                alert('Mitigate request failed: ' + err.message);
+            }
+        }
+
+        // ── On-Demand Domain Verification ──────────────────────────────────────
+        function _dnsStatusBadge(status) {
+            const map = {
+                LIVE:      ['#00ff88', 'rgba(0,255,136,0.12)',  'LIVE'],
+                MAIL_ONLY: ['#ffab00', 'rgba(255,171,0,0.12)', 'MAIL-ONLY'],
+                DEAD:      ['#ff4757', 'rgba(255,71,87,0.12)',  'DEAD'],
+            };
+            const [col, bg, label] = map[status] || ['#888', 'transparent', status || '—'];
+            return `<span style="display:inline-block;padding:2px 8px;border-radius:3px;
+                                 background:${bg};color:${col};font-size:0.75rem;
+                                 font-weight:700;border:1px solid ${col}55;letter-spacing:0.05em;">
+                        ${label}
+                    </span>`;
+        }
+
+        async function checkEmailDomain() {
+            const input   = document.getElementById('domain-check-input').value.trim();
+            const subject = (document.getElementById('subject_input')?.value || '').trim();
+            const resultEl = document.getElementById('domain-check-result');
+            if (!input) {
+                resultEl.style.display = 'block';
+                resultEl.innerHTML = '<p style="color:#ffab00;">Please enter an email address or domain.</p>';
+                return;
+            }
+
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<p style="color:#888;">⏳ Checking… (DNS + Mino AI verification may take a moment)</p>';
+
+            try {
+                const payload = { email: input };
+                if (subject) payload.subject = subject;
+                const res = await fetch('/api/email_domain_check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    resultEl.innerHTML = `<p style="color:#ff4757;">Error: ${escHtml(data.error || 'unknown')}</p>`;
+                    return;
+                }
+
+                const v = data.verdict || '';
+                const isBEC        = v.includes('Business Email Compromise') ||
+                                     (data.verdict_key === 'BEC');
+                const isCritical   = v.startsWith('CRITICAL');
+                const isForgery    = v === 'FORGERY DETECTED' || isCritical || isBEC;
+                const isSuspicious = v.startsWith('SUSPICIOUS');
+                const isClean      = v === 'CLEAN';
+
+                const verdictColor  = isBEC ? '#ff6b00'
+                                    : isCritical ? '#ff4757' : isForgery ? '#ff6b6b'
+                                    : isSuspicious ? '#ffab00' : '#00ff88';
+                const verdictBg     = isBEC        ? 'rgba(255,107,0,0.12)'
+                                    : isCritical   ? 'rgba(255,71,87,0.12)'
+                                    : isForgery    ? 'rgba(255,71,87,0.08)'
+                                    : isSuspicious ? 'rgba(255,171,0,0.10)'
+                                    : 'rgba(0,255,136,0.08)';
+                const verdictBorder = isBEC ? '#ff6b00'
+                                    : isCritical || isForgery ? '#ff4757'
+                                    : isSuspicious ? '#ffab00' : '#00ff88';
+                const verdictIcon   = isBEC ? '🕵️'
+                                    : isCritical ? '🚨' : isForgery ? '⛔'
+                                    : isSuspicious ? '⚠️' : '✅';
+
+                const dns      = data.dns || {};
+                const dnsStatus = dns.status || '—';
+                const statusBadge = _dnsStatusBadge(dnsStatus);
+
+                const checksHtml = (data.checks || []).map(c => {
+                    const ok  = c.result === 'PASS' || c.result.startsWith('PASS');
+                    const col = ok ? '#00ff88' : (c.result === 'WARNING' ? '#ffab00' : '#ff4757');
+                    return `<tr style="border-bottom:1px solid #1e1e1e;">
+                        <td style="padding:6px 10px;font-size:0.83rem;">${escHtml(c.name)}</td>
+                        <td style="padding:6px 10px;">
+                            <span style="color:${col};font-size:0.8rem;font-weight:600;">${escHtml(c.result)}</span>
+                        </td>
+                        <td style="padding:6px 10px;font-size:0.8rem;color:#aaa;">${escHtml(c.detail || '')}</td>
+                    </tr>`;
+                }).join('');
+
+                // ── Subject Alignment badge ──────────────────────────────────
+                const sa = data.subject_alignment || null;
+                let alignmentBadge = '';
+                if (sa) {
+                    const aStatus = sa.alignment_status || 'AMBIGUOUS';
+                    const aBadge  = sa.alignment_badge  || '🟡 Ambiguous';
+                    const aBg     = aStatus === 'ALIGNED'           ? 'rgba(0,255,136,0.10)'
+                                  : aStatus === 'AMBIGUOUS'         ? 'rgba(255,255,255,0.05)'
+                                  : 'rgba(255,71,87,0.12)';
+                    const aBorder = aStatus === 'ALIGNED'           ? '#00ff88'
+                                  : aStatus === 'AMBIGUOUS'         ? '#444'
+                                  : '#ff4757';
+                    const aDetail = sa.detail || '';
+                    const aBrands = (sa.extracted_brands || [])
+                        .map(b => b.split('.')[0]).join(', ');
+                    alignmentBadge = `
+                        <div style="margin-top:10px;padding:8px 12px;border-radius:5px;
+                                    background:${aBg};border:1px solid ${aBorder}30;">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <span style="font-size:0.72rem;color:#555;font-weight:600;
+                                             letter-spacing:0.06em;text-transform:uppercase;">
+                                    Alignment Status
+                                </span>
+                                <span style="font-size:0.85rem;font-weight:700;
+                                             color:${aBorder};">${escHtml(aBadge)}</span>
+                                ${aBrands ? `<span style="font-size:0.73rem;color:#666;">
+                                    brands: ${escHtml(aBrands)}</span>` : ''}
+                            </div>
+                            ${aDetail ? `<div style="margin-top:4px;font-size:0.78rem;color:#888;
+                                              line-height:1.5;">${escHtml(aDetail)}</div>` : ''}
+                        </div>`;
+                }
+
+                const matchedLine = data.matched_legit
+                    ? `<div style="margin-top:6px;font-size:0.83rem;color:#ffab00;">
+                           Near-miss of: <code style="color:#fff;">${escHtml(data.matched_legit)}</code>
+                       </div>` : '';
+
+                const dnsDetailLine = dnsStatus !== 'LIVE' ? '' : (() => {
+                    const aRecs = (dns.a_records || []).join(', ') || '—';
+                    const mxRecs = (dns.mx_records || []).join(', ') || '—';
+                    return `<div style="margin-top:6px;font-size:0.78rem;color:#666;">
+                        A: ${escHtml(aRecs)} &nbsp;·&nbsp; MX: ${escHtml(mxRecs || '—')}
+                    </div>`;
+                })();
+
+                // If squatter added, reload the table
+                const isNonExistent = isCritical && dnsStatus === 'DEAD';
+
+                // ── Mino AI verification panel ──────────────────────────────
+                const mino = data.mino || null;
+                let minoHtml = '';
+                if (mino && !isForgery && !isCritical) {
+                    const mv = mino.verdict || 'UNKNOWN';
+                    const mc = mino.confidence != null ? (mino.confidence * 100).toFixed(0) + '%' : '—';
+                    const mr = mino.reason || '';
+                    const ms = mino.source === 'llm' ? '🤖 LLM' : '📐 Heuristic';
+                    const mvColor = mv === 'LEGITIMATE' ? '#00ff88' : mv === 'SUSPICIOUS' ? '#ffab00' : '#888';
+                    const sig = mino.signals || {};
+                    const sigRows = [
+                        ['Redirects to',  sig.final_url    || sig.http_error || '—'],
+                        ['Page title',    sig.page_title   || '—'],
+                        ['DuckDuckGo',    (sig.ddg_abstract ? sig.ddg_abstract.slice(0,100) + (sig.ddg_abstract.length > 100 ? '…' : '') : '') || sig.ddg_error || '—'],
+                        ['WHOIS org',     sig.whois_org    || '—'],
+                        ['WHOIS created', sig.whois_created || '—'],
+                    ].filter(([, v]) => v && v !== '—').map(([k, v]) =>
+                        `<tr><td style="padding:3px 10px;font-size:0.76rem;color:#666;white-space:nowrap;">${escHtml(k)}</td>
+                             <td style="padding:3px 10px;font-size:0.76rem;color:#aaa;word-break:break-word;">${escHtml(v)}</td></tr>`
+                    ).join('');
+                    minoHtml = `
+                        <div style="margin-top:12px;border-top:1px solid #222;padding-top:10px;">
+                            <div style="font-size:0.78rem;color:#555;margin-bottom:5px;font-weight:600;letter-spacing:0.05em;">
+                                MINO AI VERIFICATION &nbsp;<span style="font-weight:400;color:#444;">${ms}</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                                <span style="font-size:0.85rem;font-weight:700;color:${mvColor};">${escHtml(mv)}</span>
+                                <span style="font-size:0.78rem;color:#555;">confidence: ${mc}</span>
+                            </div>
+                            <div style="font-size:0.8rem;color:#999;margin-bottom:6px;">${escHtml(mr)}</div>
+                            ${sigRows ? `<table style="border-collapse:collapse;">${sigRows}</table>` : ''}
+                        </div>`;
+                }
+
+                resultEl.innerHTML = `
+                    <div style="border-left:4px solid ${verdictBorder};background:${verdictBg};
+                                border-radius:6px;padding:16px 20px;">
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                            <span style="font-size:1.3rem;">${verdictIcon}</span>
+                            <span style="font-size:1.05rem;font-weight:700;color:${verdictColor};">
+                                ${escHtml(v)}
+                            </span>
+                            ${statusBadge}
+                            <span style="font-size:0.78rem;color:#666;margin-left:auto;">
+                                ${escHtml(data.domain)} · ${new Date(data.timestamp).toLocaleTimeString()}
+                            </span>
+                        </div>
+                        <div style="color:#ccc;font-size:0.88rem;">${escHtml(data.detail)}</div>
+                        ${matchedLine}
+                        ${dnsDetailLine}
+                        ${alignmentBadge}
+                        ${isNonExistent
+                            ? `<div style="margin-top:8px;font-size:0.8rem;color:#ff4757;">
+                                   ⬆ Added to Blacklisted Squatters table below.
+                               </div>` : ''}
+                        ${minoHtml}
+                        ${checksHtml ? `
+                        <details style="margin-top:12px;">
+                            <summary style="cursor:pointer;color:#777;font-size:0.8rem;user-select:none;">
+                                Show check breakdown (${(data.checks || []).length} checks)
+                            </summary>
+                            <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+                                <thead>
+                                    <tr style="text-align:left;border-bottom:1px solid #333;">
+                                        <th style="padding:5px 10px;font-size:0.78rem;color:#555;">Check</th>
+                                        <th style="padding:5px 10px;font-size:0.78rem;color:#555;">Result</th>
+                                        <th style="padding:5px 10px;font-size:0.78rem;color:#555;">Detail</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${checksHtml}</tbody>
+                            </table>
+                        </details>` : ''}
+                    </div>`;
+
+                if (isNonExistent) loadSquatters();
+            } catch (err) {
+                resultEl.innerHTML = `<p style="color:#ff4757;">Request failed: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        // ── Deep Research pipeline (Tier 1 + Mino Tier 2) ──────────────────
+        async function runDomainInspect() {
+            const input   = document.getElementById('domain-check-input').value.trim();
+            const subject = (document.getElementById('subject_input')?.value || '').trim();
+            const panelEl = document.getElementById('deep-research-panel');
+            if (!input) {
+                panelEl.style.display = 'block';
+                panelEl.innerHTML = '<p style="color:#ffab00;">Please enter an email address or domain.</p>';
+                return;
+            }
+
+            panelEl.style.display = 'block';
+            panelEl.innerHTML = `
+                <div style="color:#777;font-size:0.85rem;padding:16px 0;display:flex;align-items:center;gap:10px;">
+                    <span style="display:inline-block;width:14px;height:14px;border:2px solid #00d4ff;
+                                 border-top-color:transparent;border-radius:50%;
+                                 animation:spin 0.8s linear infinite;"></span>
+                    Running Tier 1 screener + Mino Tier 2 research (anchor · community · reputation · DNA${subject ? ' · subject alignment' : ''})…
+                </div>`;
+
+            try {
+                const payload = { domain: input };
+                if (subject) payload.subject = subject;
+                const res  = await fetch('/api/email_inspect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    panelEl.innerHTML = `<p style="color:#ff4757;">Error: ${escHtml(data.error || 'unknown')}</p>`;
+                    return;
+                }
+                panelEl.innerHTML = _renderDeepResearch(data);
+                if (data.verdict && (data.verdict.includes('CRITICAL') || data.verdict.includes('Non-Existent'))) {
+                    loadSquatters();
+                }
+            } catch (err) {
+                panelEl.innerHTML = `<p style="color:#ff4757;">Request failed: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        function _renderDeepResearch(data) {
+            const score   = data.trust_score ?? 50;
+            const vkey    = data.verdict_key || '';
+            const verdict = data.verdict || vkey;
+
+            // Trust score colour
+            const scoreColor = score >= 80 ? '#00ff88' : score >= 62 ? '#7fff7f'
+                             : score >= 42 ? '#ffcc00' : score >= 22 ? '#ff8c00' : '#ff4757';
+            const scoreBar   = Math.round(score * 1.8); // px width out of 180px
+            const isBEC        = vkey === 'BEC' || verdict.includes('Business Email Compromise');
+            const verdictColor = verdict.includes('LEGITIMATE') || verdict === 'CLEAN' ? '#00ff88'
+                               : isBEC ? '#ff6b00'
+                               : verdict.includes('COMMUNITY') || verdict.includes('CRITICAL') ? '#ff4757'
+                               : verdict.includes('FORGERY') ? '#ff4757'
+                               : verdict.includes('SUSPICIOUS') || verdict.includes('HIGH_RISK') ? '#ffab00'
+                               : '#aaa';
+            const verdictIcon = verdict.includes('LEGITIMATE') || verdict === 'CLEAN' ? '✅'
+                              : isBEC ? '🕵️'
+                              : verdict.includes('FORGERY') || verdict.includes('CRITICAL') ? '🚨'
+                              : verdict.includes('COMMUNITY') ? '🚨'
+                              : verdict.includes('SUSPICIOUS') ? '⚠️' : '❓';
+
+            // ── Side-by-side: Input vs Anchor ───────────────────────────────
+            const t2        = data.tier2 || {};
+            const anchor    = t2.anchor    || {};
+            const redirect  = t2.redirect  || {};
+            // Google anchor is most authoritative; fall back to DDG then redirect
+            const gOv       = t2.google_overview || {};
+            const anchorDom = gOv.google_anchor || anchor.anchor_domain || redirect.final_domain || '—';
+            const anchorUrl = anchor.anchor_url    || redirect.final_url    || '';
+            const anchorTitle = anchor.title || redirect.page_title || '—';
+            const inputTitle  = (t2.site_dna || {}).input_title  || redirect.page_title || '—';
+
+            const inputFavUrl  = (t2.site_dna || {}).input_favicon_url  || '';
+            const anchorFavUrl = (t2.site_dna || {}).anchor_favicon_url || '';
+            const favClone  = (t2.site_dna || {}).favicon_clone || false;
+            const titleSim  = (t2.site_dna || {}).title_similarity || 0;
+
+            function _domainCard(domain, title, favUrl, label, isAnchor) {
+                const lc    = isAnchor ? '#00d4ff' : '#888';
+                const imgHtml = favUrl
+                    ? `<img src="${escHtml(favUrl)}" alt="favicon"
+                            onerror="this.style.display='none'"
+                            style="width:20px;height:20px;border-radius:3px;object-fit:contain;
+                                   flex-shrink:0;background:#1a1a1a;" />`
+                    : `<span style="width:20px;height:20px;border-radius:3px;background:#1e1e1e;
+                                    display:inline-block;flex-shrink:0;"></span>`;
+                return `
+                    <div style="flex:1;min-width:160px;background:rgba(255,255,255,0.03);
+                                border:1px solid rgba(255,255,255,0.08);border-radius:6px;padding:14px 16px;">
+                        <div style="font-size:0.72rem;color:${lc};font-weight:600;letter-spacing:0.08em;
+                                    margin-bottom:8px;text-transform:uppercase;">${escHtml(label)}</div>
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                            ${imgHtml}
+                            <span style="font-family:monospace;font-size:0.92rem;color:#eee;word-break:break-all;">
+                                ${escHtml(domain)}
+                            </span>
+                        </div>
+                        <div style="font-size:0.78rem;color:#777;margin-bottom:4px;
+                                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;"
+                             title="${escHtml(title)}">
+                            ${escHtml(title ? title.slice(0,60) + (title.length > 60 ? '…' : '') : '—')}
+                        </div>
+                    </div>`;
+            }
+
+            const vsArrow = favClone
+                ? `<div style="font-size:1.3rem;color:#ff4757;align-self:center;flex-shrink:0;"
+                       title="Favicon match — clone detected">⚠️</div>`
+                : `<div style="font-size:0.9rem;color:#444;align-self:center;flex-shrink:0;">vs</div>`;
+
+            const domainCards = `
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:stretch;">
+                    ${_domainCard(data.domain || '—', inputTitle, inputFavUrl, 'Input Domain', false)}
+                    ${vsArrow}
+                    ${_domainCard(anchorDom, anchorTitle, anchorFavUrl, 'Official Anchor', true)}
+                </div>`;
+
+            // ── Trust score meter ────────────────────────────────────────────
+            const trustMeter = `
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px;">
+                        <span style="font-size:0.72rem;color:#555;letter-spacing:0.08em;
+                                     text-transform:uppercase;font-weight:600;">Trust Score</span>
+                        <span style="font-size:1.6rem;font-weight:700;color:${scoreColor};line-height:1;">
+                            ${score}
+                        </span>
+                        <span style="font-size:0.8rem;color:#555;">/ 100</span>
+                    </div>
+                    <div style="position:relative;height:8px;background:rgba(255,255,255,0.06);
+                                border-radius:4px;overflow:hidden;max-width:300px;">
+                        <div style="position:absolute;inset:0;background:linear-gradient(90deg,
+                                    #ff4757 0%,#ff8c00 30%,#ffcc00 55%,#00ff88 100%);
+                                    border-radius:4px;opacity:0.25;"></div>
+                        <div style="position:absolute;top:0;left:0;height:100%;width:${score}%;
+                                    background:${scoreColor};border-radius:4px;
+                                    transition:width 0.6s ease;"></div>
+                    </div>
+                </div>`;
+
+            // ── Alignment Status badge ───────────────────────────────────────
+            const sa = data.subject_alignment || null;
+            let alignmentSection = '';
+            if (sa) {
+                const aStatus = sa.alignment_status || 'AMBIGUOUS';
+                const aBadge  = sa.alignment_badge  || '🟡 Ambiguous';
+                const aBg     = aStatus === 'ALIGNED'   ? 'rgba(0,255,136,0.08)'
+                              : aStatus === 'AMBIGUOUS' ? 'rgba(255,255,255,0.03)'
+                              : 'rgba(255,71,87,0.10)';
+                const aBorder = aStatus === 'ALIGNED'   ? '#00ff88'
+                              : aStatus === 'AMBIGUOUS' ? '#333'
+                              : '#ff4757';
+                const aDetail = sa.detail || '';
+                const aBrands = (sa.extracted_brands || [])
+                    .map(b => b.split('.')[0].replace(/^./, c => c.toUpperCase())).join(', ');
+                const saAnchor = sa.official_anchor || '';
+                const homoFlags = (sa.subject_homograph?.flags || []).join('; ');
+
+                // Build signal rows for the accordion
+                const saRows = [
+                    `<tr style="border-bottom:1px solid #111;">
+                        <td style="padding:7px 12px;font-size:0.78rem;color:#666;width:130px;">Status</td>
+                        <td style="padding:7px 12px;font-size:0.85rem;font-weight:700;color:${aBorder};">${escHtml(aBadge)}</td>
+                        <td style="padding:7px 12px;width:12px;"><span style="display:inline-block;width:8px;height:8px;
+                            border-radius:50%;background:${aBorder};"></span></td></tr>`,
+                    aBrands ? `<tr style="border-bottom:1px solid #111;">
+                        <td style="padding:7px 12px;font-size:0.78rem;color:#666;">Brands found</td>
+                        <td colspan="2" style="padding:7px 12px;font-size:0.78rem;color:#aaa;">${escHtml(aBrands)}</td></tr>` : '',
+                    saAnchor ? `<tr style="border-bottom:1px solid #111;">
+                        <td style="padding:7px 12px;font-size:0.78rem;color:#666;">Official Anchor</td>
+                        <td colspan="2" style="padding:7px 12px;font-size:0.78rem;color:#aaa;">${escHtml(saAnchor)}</td></tr>` : '',
+                    homoFlags ? `<tr style="border-bottom:1px solid #111;">
+                        <td style="padding:7px 12px;font-size:0.78rem;color:#ff4757;">Homograph</td>
+                        <td colspan="2" style="padding:7px 12px;font-size:0.78rem;color:#ff9999;">${escHtml(homoFlags)}</td></tr>` : '',
+                    aDetail ? `<tr>
+                        <td style="padding:7px 12px;font-size:0.78rem;color:#666;">Detail</td>
+                        <td colspan="2" style="padding:7px 12px;font-size:0.78rem;color:#aaa;line-height:1.5;">${escHtml(aDetail)}</td></tr>` : '',
+                ].filter(Boolean).join('');
+
+                alignmentSection = `
+                    <div style="margin-bottom:14px;padding:12px 16px;border-radius:6px;
+                                background:${aBg};border:1px solid ${aBorder}40;">
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+                            <span style="font-size:0.72rem;color:#555;font-weight:600;
+                                         letter-spacing:0.07em;text-transform:uppercase;">
+                                Alignment Status
+                            </span>
+                            <span style="font-size:1rem;font-weight:700;color:${aBorder};">
+                                ${escHtml(aBadge)}
+                            </span>
+                            ${aBrands ? `<span style="font-size:0.73rem;color:#666;">
+                                brands: ${escHtml(aBrands)}</span>` : ''}
+                        </div>
+                        ${aDetail ? `<div style="font-size:0.8rem;color:#999;line-height:1.5;">
+                            ${escHtml(aDetail)}</div>` : ''}
+                    </div>`;
+
+                // Inject into t2Accordions later via saAccordion variable
+                window._saRows = saRows;
+                window._saOpen = aStatus !== 'AMBIGUOUS';
+            } else {
+                window._saRows = null;
+            }
+
+            // ── Verdict badge ────────────────────────────────────────────────
+            const verdictRow = `
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+                    <span style="font-size:1.2rem;">${verdictIcon}</span>
+                    <span style="font-size:1.05rem;font-weight:700;color:${verdictColor};">
+                        ${escHtml(verdict)}
+                    </span>
+                    ${data.matched_legit
+                        ? `<span style="font-size:0.78rem;background:rgba(255,71,87,0.1);
+                                        color:#ff6b6b;border:1px solid #ff475730;border-radius:10px;
+                                        padding:2px 8px;">Impersonates: ${escHtml(data.matched_legit)}</span>`
+                        : ''}
+                    <span style="font-size:0.72rem;color:#444;margin-left:auto;">
+                        ${escHtml(data.domain)} ·
+                        ${data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : ''}
+                        ${data.is_realtime ? '· <span style="color:#00d4ff;">Real-Time</span>' : '· Cached'}
+                    </span>
+                </div>`;
+
+            // ── Mino AI Reasoning (Claude-synthesised) ───────────────────────
+            const reasoningBox = `
+                <div style="background:rgba(0,212,255,0.04);border-left:3px solid #00d4ff55;
+                             border-radius:4px;padding:12px 16px;margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="font-size:0.72rem;color:#00d4ff99;letter-spacing:0.08em;
+                                     font-weight:600;text-transform:uppercase;">
+                            Mino AI Reasoning
+                        </span>
+                        <span style="font-size:0.68rem;color:#00d4ff44;font-style:italic;">
+                            synthesised by Claude
+                        </span>
+                    </div>
+                    <div style="font-size:0.85rem;color:#ccc;line-height:1.6;">
+                        ${escHtml(data.reasoning || data.detail || '—')}
+                    </div>
+                </div>`;
+
+            // ── Tier 2 signals accordion ─────────────────────────────────────
+            function _sigRow(label, value, status) {
+                const dot = status === 'ok' ? '#00ff88' : status === 'warn' ? '#ffab00'
+                          : status === 'bad' ? '#ff4757' : '#555';
+                return `<tr style="border-bottom:1px solid #111;">
+                    <td style="padding:7px 12px;font-size:0.78rem;color:#666;
+                               white-space:nowrap;width:130px;">${escHtml(label)}</td>
+                    <td style="padding:7px 12px;font-size:0.78rem;color:#aaa;
+                               word-break:break-word;">${escHtml(String(value || '—').slice(0,120))}</td>
+                    <td style="padding:7px 12px;text-align:right;width:12px;">
+                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+                                     background:${dot};"></span>
+                    </td></tr>`;
+            }
+
+            // Google Overview block
+            const gov = t2.google_overview || {};
+            const gAnchor = gov.google_anchor || '';
+            const govRows = [
+                _sigRow('Google #1 anchor', gAnchor || '—',
+                    gAnchor === data.domain ? 'ok' : gAnchor ? 'warn' : ''),
+                _sigRow('Official confirmed', gov.official_confirmed ? 'Yes ✓' : 'No',
+                    gov.official_confirmed ? 'ok' : ''),
+                _sigRow('AI Overview scam', gov.ai_overview_scam ? '⚠ YES — scam language detected' : 'No',
+                    gov.ai_overview_scam ? 'bad' : 'ok'),
+                _sigRow('AI Overview text', gov.ai_overview ? gov.ai_overview.slice(0,120) : '(not found)',
+                    gov.ai_overview_scam ? 'bad' : ''),
+                _sigRow('Scam search hits', gov.scam_search_hits ?? 0,
+                    gov.scam_search_hits > 0 ? 'bad' : 'ok'),
+                _sigRow('Scam sites',   (gov.scam_search_sites || []).join(', ') || 'none', ''),
+                _sigRow('Detail',       gov.detail || '—', gov.ai_overview_scam ? 'bad' : ''),
+            ].join('');
+
+            // Anchor block
+            const anchorRows = [
+                _sigRow('Search query',  anchor.query || '—', ''),
+                _sigRow('DDG anchor',    anchorDom,
+                    anchorDom === data.domain ? 'ok' : anchorDom !== '—' ? 'warn' : ''),
+                _sigRow('Source',        anchor.source || 'ddg', ''),
+                _sigRow('Anchor title',  anchor.title || '—', ''),
+                _sigRow('Redirect to',   redirect.final_url ? redirect.final_url.slice(0,80) : '—',
+                    redirect.final_domain && redirect.final_domain !== data.domain ? 'ok' : ''),
+            ].join('');
+
+            // Community block
+            const comm = t2.community || {};
+            const saScore = comm.scamadviser_score;
+            const commRows = [
+                _sigRow('Scam mentions', comm.scam_mentions ?? '—',
+                    comm.scam_mentions > 0 ? 'warn' : 'ok'),
+                _sigRow('Scam sites',   (comm.scam_sites || []).join(', ') || 'none', ''),
+                _sigRow('ScamAdviser',  saScore != null ? `${saScore}/100` : 'n/a',
+                    saScore != null ? (saScore < 30 ? 'bad' : saScore < 60 ? 'warn' : 'ok') : ''),
+                _sigRow('Detail',       comm.detail || '—', ''),
+            ].join('');
+
+            // Reputation block
+            const rep = t2.reputation || {};
+            const repRows = [
+                _sigRow('Spamhaus DBL', rep.spamhaus_listed
+                    ? `LISTED — ${rep.spamhaus_type}` : 'clean',
+                    rep.spamhaus_listed ? 'bad' : 'ok'),
+                _sigRow('SURBL multi',  rep.surbl_listed  ? 'LISTED' : 'clean',
+                    rep.surbl_listed  ? 'bad' : 'ok'),
+                _sigRow('URIBL black',  rep.uribl_listed  ? 'LISTED' : 'clean',
+                    rep.uribl_listed  ? 'bad' : 'ok'),
+            ].join('');
+
+            // Site DNA block
+            const dna = t2.site_dna || {};
+            const dnaRows = [
+                _sigRow('Anchor domain',    dna.anchor_domain    || anchorDom, ''),
+                _sigRow('Favicon clone',    dna.favicon_clone    ? 'YES — hashes match' : 'no',
+                    dna.favicon_clone ? 'bad' : 'ok'),
+                _sigRow('Title similarity', dna.title_similarity != null
+                    ? `${(dna.title_similarity*100).toFixed(0)}%` : '—',
+                    dna.title_clone ? 'bad' : dna.title_similarity > 0.4 ? 'warn' : 'ok'),
+                _sigRow('Input title',      dna.input_title  || '—', ''),
+                _sigRow('Anchor title',     dna.anchor_title || '—', ''),
+                _sigRow('DNA verdict',      dna.detail || '—', dna.favicon_clone || dna.title_clone ? 'bad' : 'ok'),
+            ].join('');
+
+            // Ownership block
+            const own = t2.ownership || {};
+            const ownVerdict = own.verdict || 'SKIPPED';
+            const ownRows = ownVerdict !== 'SKIPPED' ? [
+                _sigRow('Verdict',        ownVerdict,
+                    ownVerdict === 'SAME_OWNER' ? 'ok' : ownVerdict === 'DIFFERENT_OWNER' ? 'bad' : 'warn'),
+                _sigRow('Input org',      own.input_org    || (own.input_private ? '(hidden — privacy service)' : 'n/a'),
+                    ownVerdict === 'SAME_OWNER' ? 'ok' : ownVerdict === 'DIFFERENT_OWNER' ? 'bad' : 'warn'),
+                _sigRow('Official org',   own.official_org || '—', ''),
+                _sigRow('NS overlap',     own.ns_overlap ? 'Yes — shared infrastructure'
+                                                         : 'No — different infrastructure',
+                    own.ns_overlap ? 'ok' : 'warn'),
+                _sigRow('Created',        own.input_created || '—', ''),
+                _sigRow('Detail',         own.detail || '—',
+                    ownVerdict === 'SAME_OWNER' ? 'ok' : ownVerdict === 'DIFFERENT_OWNER' ? 'bad' : 'warn'),
+            ].join('') : _sigRow('Status', 'Not run (no brand impersonation detected)', '');
+
+            // Tier 1 checks table
+            const t1 = data.tier1 || {};
+            const t1Rows = (t1.checks || data.checks || []).map(c => {
+                const st = c.result === 'PASS' ? 'ok' : c.result === 'FAIL' ? 'bad' : 'warn';
+                return _sigRow(c.name, c.detail || c.result, st);
+            }).join('');
+
+            function _accordion(id, title, rows, defaultOpen) {
+                return `
+                    <details ${defaultOpen ? 'open' : ''} style="margin-bottom:6px;">
+                        <summary style="cursor:pointer;padding:9px 12px;
+                                        background:rgba(255,255,255,0.03);border-radius:4px;
+                                        color:#ccc;font-size:0.82rem;font-weight:600;
+                                        list-style:none;display:flex;align-items:center;gap:8px;">
+                            <span style="color:#00d4ff;font-size:0.7rem;">▶</span> ${escHtml(title)}
+                        </summary>
+                        <table style="width:100%;border-collapse:collapse;
+                                      background:rgba(255,255,255,0.01);">
+                            ${rows}
+                        </table>
+                    </details>`;
+            }
+
+            const t2Accordions = `
+                <div style="margin-top:14px;">
+                    <div style="font-size:0.72rem;color:#555;letter-spacing:0.08em;
+                                text-transform:uppercase;font-weight:600;margin-bottom:8px;">
+                        Mino Tier 2 Signals
+                    </div>
+                    ${window._saRows ? _accordion('sa', '🎯 Subject-Domain Alignment', window._saRows, window._saOpen) : ''}
+                    ${_accordion('own',  '🏢 Ownership Verification  (WHOIS registrant)', ownRows, isBEC)}
+                    ${_accordion('goo',  '🔎 Google AI Overview  (anchor · scam signals)', govRows, true)}
+                    ${_accordion('anc',  '🔍 Anchor Search  (DDG fallback)', anchorRows, false)}
+                    ${_accordion('comm', '🌐 Community Reputation  (DDG scam · ScamAdviser)', commRows, false)}
+                    ${_accordion('rep',  '🛡️ DNSBL Reputation  (Spamhaus · SURBL · URIBL)', repRows, false)}
+                    ${_accordion('dna',  '🧬 Site DNA  (favicon · meta-title)', dnaRows, false)}
+                    ${t1Rows ? _accordion('t1', '⚡ Tier 1 Identity Guard checks', t1Rows, false) : ''}
+                </div>`;
+
+            const isForgery = verdict.includes('FORGERY') || verdict.includes('CRITICAL') || isBEC;
+            const borderCol = isBEC ? '#ff6b00'
+                            : score >= 80 ? '#00ff88' : score >= 62 ? '#2dbe60'
+                            : score >= 42 ? '#ffcc00' : score >= 22 ? '#ff8c00' : '#ff4757';
+            const bgCol = isBEC ? 'rgba(255,107,0,0.08)'
+                        : isForgery ? 'rgba(255,71,87,0.07)'
+                        : score >= 62 ? 'rgba(0,255,136,0.04)' : 'rgba(255,171,0,0.05)';
+
+            return `
+                <div style="border-left:4px solid ${borderCol};background:${bgCol};
+                            border-radius:6px;padding:18px 22px;">
+                    ${verdictRow}
+                    ${alignmentSection}
+                    ${trustMeter}
+                    ${domainCards}
+                    ${reasoningBox}
+                    ${t2.anchor || t2.community ? t2Accordions : ''}
+                </div>`;
+        }
+
+        // ── Blacklisted Squatters ───────────────────────────────────────────
+        async function loadSquatters() {
+            try {
+                const data = await fetchJSON('/api/squatters');
+                const squatters = data.squatters || [];
+                const tableEl   = document.getElementById('squatters-table');
+                const emptyEl   = document.getElementById('squatters-empty');
+                const tbody     = document.getElementById('squatters-tbody');
+
+                if (!squatters.length) {
+                    tableEl.style.display = 'none';
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                tableEl.style.display = 'table';
+                emptyEl.style.display = 'none';
+
+                tbody.innerHTML = squatters.map((s, i) => {
+                    const ts = s.first_seen ? new Date(s.first_seen).toLocaleString() : '—';
+                    return `<tr style="border-bottom:1px solid #1e1e1e;">
+                        <td style="padding:9px 12px;font-family:monospace;font-size:0.85rem;color:#ff6b6b;">
+                            ${escHtml(s.domain)}
+                        </td>
+                        <td style="padding:9px 12px;font-size:0.85rem;color:#ffab00;">
+                            ${escHtml(s.matched_legit || '—')}
+                        </td>
+                        <td style="padding:9px 12px;">${_dnsStatusBadge(s.dns_status)}</td>
+                        <td style="padding:9px 12px;font-size:0.78rem;color:#ff4757;font-weight:600;">
+                            ${escHtml(s.verdict)}
+                        </td>
+                        <td style="padding:9px 12px;font-size:0.78rem;color:#888;max-width:240px;word-break:break-word;">
+                            ${escHtml(s.reason || '—')}
+                        </td>
+                        <td style="padding:9px 12px;font-size:0.78rem;color:#666;">${escHtml(ts)}</td>
+                        <td style="padding:9px 12px;text-align:center;">
+                            <button onclick="removeSquatter(${i})"
+                                style="padding:3px 10px;font-size:0.75rem;background:rgba(255,71,87,0.12);
+                                       color:#ff4757;border:1px solid #ff475740;border-radius:3px;cursor:pointer;">
+                                Remove
+                            </button>
+                        </td>
+                    </tr>`;
+                }).join('');
+
+                window._squatterList = squatters;
+            } catch (err) {
+                console.error('loadSquatters error:', err);
+            }
+        }
+
+        // ── Verify Identity pipeline ──────────────────────────────────────────
+        async function verifyIdentity() {
+            const input   = document.getElementById('domain-check-input').value.trim();
+            const subject = (document.getElementById('subject_input')?.value || '').trim();
+            const panelEl = document.getElementById('verify-identity-panel');
+            // Hide other panels so result is unambiguous
+            document.getElementById('domain-check-result').style.display = 'none';
+            document.getElementById('deep-research-panel').style.display  = 'none';
+            if (!input) {
+                panelEl.style.display = 'block';
+                panelEl.innerHTML = '<p style="color:#ffab00;">Please enter an email address or domain.</p>';
+                return;
+            }
+
+            panelEl.style.display = 'block';
+            panelEl.innerHTML = `
+                <div style="color:#777;font-size:0.85rem;padding:16px 0;display:flex;align-items:center;gap:10px;">
+                    <span style="display:inline-block;width:14px;height:14px;border:2px solid #a78bfa;
+                                 border-top-color:transparent;border-radius:50%;
+                                 animation:spin 0.8s linear infinite;"></span>
+                    Running Identity Verification Gate (DNS → structural → auth${subject ? ' → subject alignment' : ''} → verdict)…
+                </div>`;
+
+            try {
+                const payload = { email: input };
+                if (subject) payload.subject = subject;
+                const res  = await fetch('/api/verify_identity', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    panelEl.innerHTML = `<p style="color:#ff4757;">Error: ${escHtml(data.error || 'unknown')}</p>`;
+                    return;
+                }
+                panelEl.innerHTML = _renderVerifyResult(data);
+            } catch (err) {
+                panelEl.innerHTML = `<p style="color:#ff4757;">Request failed: ${escHtml(err.message)}</p>`;
+            }
+        }
+
+        function _renderVerifyResult(data) {
+            const passed  = data.passed;
+            const status  = data.status  || '';
+            const code    = data.code    || status;
+            const reason  = data.reason  || '';
+            const domain  = data.domain  || '';
+            const score   = data.trust_score ?? 0;
+            const checks  = Array.isArray(data.checks) ? data.checks : [];
+
+            // Status banner colour
+            const bannerColor = passed
+                ? (code === 'VERIFIED' ? '#00d4aa' : '#a0c4ff')
+                : '#ff4757';
+            const bannerLabel = passed
+                ? (code === 'VERIFIED' ? '✅ SUCCESS: VERIFIED' : '🟡 SUCCESS: AMBIGUOUS')
+                : `🚫 ${status}`;
+            const bannerBg = passed
+                ? (code === 'VERIFIED' ? 'rgba(0,212,170,0.12)' : 'rgba(160,196,255,0.10)')
+                : 'rgba(255,71,87,0.12)';
+
+            // Check step rows
+            const stepIcons = { PASS: '✅', FAIL: '❌', SKIP: '⏭️' };
+            const stepColors = { PASS: '#00d4aa', FAIL: '#ff4757', SKIP: '#555' };
+            const stepLabels = {
+                dns:        'DNS / Ghost Domain',
+                structural: 'Structural Integrity',
+                auth:       'SPF · DKIM · Envelope',
+                subject:    'Subject Alignment',
+            };
+
+            const checkRows = checks.map(c => {
+                const result = c.result || 'SKIP';
+                const icon   = stepIcons[result]  || '⬜';
+                const color  = stepColors[result] || '#888';
+                const label  = stepLabels[c.step] || c.step;
+                const detail = c.detail || c.reason || '';
+                return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <td style="padding:9px 12px;font-size:0.85rem;white-space:nowrap;">${icon}</td>
+                    <td style="padding:9px 12px;font-size:0.85rem;color:#ccc;">${escHtml(label)}</td>
+                    <td style="padding:9px 12px;font-size:0.82rem;color:${color};font-weight:600;">${escHtml(result)}</td>
+                    <td style="padding:9px 12px;font-size:0.80rem;color:#888;">${escHtml(detail)}</td>
+                </tr>`;
+            }).join('');
+
+            const scoreBar = `
+                <div style="margin:6px 0 0;height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden;">
+                    <div style="height:100%;width:${Math.min(100,Math.max(0,score))}%;
+                                background:${score>=70?'#00d4aa':score>=40?'#ffab00':'#ff4757'};
+                                border-radius:3px;transition:width 0.6s;"></div>
+                </div>`;
+
+            return `
+            <div style="border:1px solid rgba(255,255,255,0.10);border-radius:8px;overflow:hidden;">
+                <!-- Banner -->
+                <div style="background:${bannerBg};border-bottom:1px solid rgba(255,255,255,0.08);
+                             padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                    <span style="font-size:1.05rem;font-weight:700;color:${bannerColor};">${bannerLabel}</span>
+                    <span style="font-size:0.82rem;color:#777;">${escHtml(domain)}</span>
+                </div>
+                <!-- Reason -->
+                <div style="padding:10px 18px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <span style="font-size:0.85rem;color:#bbb;">${escHtml(reason)}</span>
+                </div>
+                <!-- Trust score -->
+                <div style="padding:10px 18px 14px;border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <span style="font-size:0.78rem;color:#555;">Trust score: </span>
+                    <span style="font-size:0.85rem;color:${score>=70?'#00d4aa':score>=40?'#ffab00':'#ff4757'};font-weight:600;">${score}/100</span>
+                    ${scoreBar}
+                </div>
+                <!-- Check steps table -->
+                <div style="padding:0;">
+                    <table style="width:100%;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.10);">
+                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;width:30px;"></th>
+                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;">Check</th>
+                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;">Result</th>
+                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;">Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>${checkRows || '<tr><td colspan="4" style="padding:12px;color:#555;text-align:center;">No check data</td></tr>'}</tbody>
+                    </table>
+                </div>
+            </div>`;
+        }
+
+        async function removeSquatter(idx) {
+            const s = (window._squatterList || [])[idx];
+            if (!s) return;
+            try {
+                await fetch('/api/squatters/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ domain: s.domain }),
+                });
+                loadSquatters();
+            } catch (err) {
+                alert('Remove failed: ' + err.message);
             }
         }
 
         // Initialize on page load
         initChart();
         refreshData();
+        refreshFirewallWidget();
+        loadLlmTheft();   // populate theft widget on home dashboard
 
         // Auto-refresh every 60 seconds
         setInterval(refreshData, 60000);
+        setInterval(refreshFirewallWidget, 60000);
+        setInterval(loadLlmTheft, 15000);  // poll theft status every 15s for fast FAIL updates
+        setInterval(loadFingerprinting, 60 * 60 * 1000);  // fingerprinting: every 60 minutes
     </script>
 </body>
 </html>
