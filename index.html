@@ -603,6 +603,7 @@
                             <tr>
                                 <th>Subject</th>
                                 <th>Sender</th>
+                                <th>Status</th>
                                 <th>Risk Score</th>
                                 <th>Risk Level</th>
                                 <th>Timestamp</th>
@@ -621,6 +622,7 @@
                             <tr>
                                 <th>Subject</th>
                                 <th>Sender</th>
+                                <th>Status</th>
                                 <th>Risk Score</th>
                                 <th>Risk Level</th>
                                 <th>Timestamp</th>
@@ -639,6 +641,7 @@
                             <tr>
                                 <th>Subject</th>
                                 <th>Sender</th>
+                                <th>Status</th>
                                 <th>Classifications</th>
                                 <th>Risk Score</th>
                                 <th>Risk Level</th>
@@ -1400,6 +1403,7 @@
                 const row = document.createElement('tr');
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.subject || '', style: 'max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.sender || '', style: 'max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                const legitStatusTd = document.createElement('td'); const legitStatusSpan = document.createElement('span'); legitStatusSpan.textContent = '✅ Legit'; legitStatusSpan.style.cssText = 'display:inline-block;padding:2px 8px;border-radius:3px;background:rgba(0,255,136,0.10);color:#00ff88;font-size:0.75rem;font-weight:700;white-space:nowrap;'; legitStatusTd.appendChild(legitStatusSpan); row.appendChild(legitStatusTd);
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.risk_score ?? '' }));
                 const badgeTd = document.createElement('td'); const badge = document.createElement('span'); badge.className = 'news-badge badge-low'; badge.textContent = email.risk_level || ''; badgeTd.appendChild(badge); row.appendChild(badgeTd);
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: formatDate(email.received_date || email.timestamp) }));
@@ -1408,7 +1412,7 @@
             });
             
             if (legitEmails.length === 0) {
-                legitTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">No legit emails in recent scan</td></tr>';
+                legitTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">No legit emails in recent scan</td></tr>';
             }
             
             // Update junk emails table (MEDIUM risk)
@@ -1419,6 +1423,7 @@
                 const row = document.createElement('tr');
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.subject || '', style: 'max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.sender || '', style: 'max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                const junkStatusTd = document.createElement('td'); const junkStatusSpan = document.createElement('span'); junkStatusSpan.textContent = '🚫 Illegit'; junkStatusSpan.style.cssText = 'display:inline-block;padding:2px 8px;border-radius:3px;background:rgba(255,171,0,0.12);color:#ffab00;font-size:0.75rem;font-weight:700;white-space:nowrap;'; junkStatusTd.appendChild(junkStatusSpan); row.appendChild(junkStatusTd);
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.risk_score ?? '' }));
                 const badgeTd = document.createElement('td'); const badge = document.createElement('span'); badge.className = 'news-badge badge-medium'; badge.textContent = email.risk_level || ''; badgeTd.appendChild(badge); row.appendChild(badgeTd);
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: formatDate(email.received_date || email.timestamp) }));
@@ -1427,7 +1432,7 @@
             });
             
             if (junkEmails.length === 0) {
-                junkTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">No junk emails detected ✅</td></tr>';
+                junkTbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">No junk emails detected ✅</td></tr>';
             }
             
             // Update flagged emails table (HIGH/CRITICAL risk)
@@ -1440,6 +1445,7 @@
 
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.subject || '', style: 'max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
                 row.appendChild(Object.assign(document.createElement('td'), { textContent: email.sender || '', style: 'max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' }));
+                const flaggedStatusTd = document.createElement('td'); const flaggedStatusSpan = document.createElement('span'); flaggedStatusSpan.textContent = '🚫 Illegit'; flaggedStatusSpan.style.cssText = 'display:inline-block;padding:2px 8px;border-radius:3px;background:rgba(255,71,87,0.14);color:#ff4757;font-size:0.75rem;font-weight:700;white-space:nowrap;'; flaggedStatusTd.appendChild(flaggedStatusSpan); row.appendChild(flaggedStatusTd);
 
                 // Classifications: handle both string[] and {type:string}[] formats
                 const classifTd = document.createElement('td');
@@ -1461,7 +1467,7 @@
             });
             
             if (flaggedEmails.length === 0) {
-                emailTbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">No flagged emails - inbox is clean! ✅</td></tr>';
+                emailTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;">No flagged emails - inbox is clean! ✅</td></tr>';
             }
             
             // Update last scan time
