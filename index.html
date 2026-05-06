@@ -415,6 +415,41 @@
             </div>
         </div>
 
+        <!-- ── Mino Live Incidents Widget ──────────────────────────────── -->
+        <div class="table-container" style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+                <h3 style="margin:0;">🚨 Mino Live Incidents
+                    <span id="incidents-pulse" style="display:inline-block;width:8px;height:8px;
+                          border-radius:50%;background:#555;margin-left:8px;
+                          vertical-align:middle;transition:background 0.4s;"></span>
+                </h3>
+                <div style="display:flex;gap:10px;align-items:center;">
+                    <span id="incidents-count" style="font-size:0.78rem;color:#555;"></span>
+                    <button onclick="loadLiveIncidents()" class="refresh-btn"
+                            style="padding:5px 12px;font-size:0.8rem;">🔄 Refresh</button>
+                </div>
+            </div>
+            <p style="color:#666;font-size:0.8rem;margin:0 0 12px;">
+                Automated Mino analysis of emails received via webhook — updates every 15 s.
+            </p>
+            <div id="incidents-empty" style="color:#555;padding:14px 0;font-size:0.85rem;">
+                No incidents yet. Send a POST to <code style="color:#888;">/api/webhook/incoming_email</code> to begin.
+            </div>
+            <table id="incidents-table" style="width:100%;border-collapse:collapse;display:none;">
+                <thead>
+                    <tr style="text-align:left;border-bottom:1px solid #333;">
+                        <th style="padding:8px 12px;font-size:0.75rem;color:#555;width:130px;">Time</th>
+                        <th style="padding:8px 12px;font-size:0.75rem;color:#555;">Sender</th>
+                        <th style="padding:8px 12px;font-size:0.75rem;color:#555;">Subject</th>
+                        <th style="padding:8px 12px;font-size:0.75rem;color:#555;width:100px;">Verdict</th>
+                        <th style="padding:8px 12px;font-size:0.75rem;color:#555;width:90px;">Status</th>
+                        <th style="padding:8px 12px;font-size:0.75rem;color:#555;">Flags</th>
+                    </tr>
+                </thead>
+                <tbody id="incidents-tbody"></tbody>
+            </table>
+        </div>
+
         <!-- LLM Theft Status Widget -->
         <div class="table-container" style="margin-bottom:20px;">
             <h3>🔒 Model Theft Status <span id="theft-widget-dot" style="font-size:0.8rem;margin-left:8px;color:#888;">●</span></h3>
@@ -664,13 +699,6 @@
                                            white-space:nowrap;">
                                 Quick Check
                             </button>
-                            <button onclick="verifyIdentity()"
-                                    title="Sequential identity gate: DNS → structural → auth → subject alignment → verdict"
-                                    style="padding:9px 16px;border-radius:5px;border:1px solid #a78bfa;
-                                           background:transparent;color:#a78bfa;cursor:pointer;font-size:0.85rem;
-                                           white-space:nowrap;">
-                                Verify Identity
-                            </button>
                         </div>
                         <!-- Row 2: Optional Subject for alignment analysis -->
                         <div style="display:flex;gap:8px;align-items:center;">
@@ -685,13 +713,24 @@
                                           color:#ccc;font-size:0.83rem;outline:none;"
                                    onkeydown="if(event.key==='Enter') runDomainInspect()" />
                         </div>
+                        <!-- Row 3: Optional CC/BCC for header brand scan -->
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <label for="cc_bcc_input"
+                                   style="font-size:0.78rem;color:#555;white-space:nowrap;
+                                          min-width:52px;text-align:right;">CC / BCC</label>
+                            <input id="cc_bcc_input"
+                                   type="text"
+                                   placeholder="Optional — paste CC, BCC or To addresses for header integrity audit"
+                                   style="flex:1;padding:7px 12px;background:rgba(255,255,255,0.04);
+                                          border:1px solid rgba(255,255,255,0.10);border-radius:5px;
+                                          color:#ccc;font-size:0.83rem;outline:none;"
+                                   onkeydown="if(event.key==='Enter') runDomainInspect()" />
+                        </div>
                     </div>
                     <!-- Quick Check result (existing) -->
                     <div id="domain-check-result" style="display:none;margin-top:18px;"></div>
                     <!-- Deep Research result panel -->
                     <div id="deep-research-panel" style="display:none;margin-top:20px;"></div>
-                    <!-- Verify Identity result panel -->
-                    <div id="verify-identity-panel" style="display:none;margin-top:20px;"></div>
                 </div>
 
                 <!-- ── Blacklisted Squatters ──────────────────────────────── -->
@@ -3255,6 +3294,88 @@
         }
 
         // ── On-Demand Domain Verification ──────────────────────────────────────
+        // ── Top-level Legit / Illegit status banner ──────────────────────────
+        // Collects every negative signal from the full result dict and renders
+        // a single clear verdict at the top of both Quick Check and Deep Research.
+        function _buildEmailStatus(data) {
+            const v     = data.verdict || data.verdict_key || '';
+            const score = data.trust_score ?? 50;
+            const sa    = data.subject_alignment || {};
+            const ha    = data.header_audit      || {};
+            const fd    = data.forensic_dna      || {};
+            const vu    = v.toUpperCase();
+
+            const issues = [];
+
+            // 1. Main verdict
+            const badVerdict = vu.includes('CRITICAL') || vu.includes('FORGERY')  ||
+                               vu.includes('SUSPICIOUS') || vu.includes('BEC')    ||
+                               vu.includes('GHOST') || vu.includes('SPOOFING')    ||
+                               vu.includes('MISALIGNED') || vu.includes('HIGH RISK') ||
+                               vu.includes('NON-EXISTENT') || vu.includes('DECEPTIVE');
+            if (badVerdict && v) issues.push(v);
+
+            // 2. Trust score (when verdict is technically clean but score is low)
+            if (!badVerdict && score < 40) issues.push(`Low trust score (${score}/100)`);
+
+            // 3. Subject alignment
+            const saStatus = sa.alignment_status || '';
+            if (saStatus === 'BRAND_DISSONANCE') {
+                const brands = (sa.extracted_brands || []).map(b => b.split('.')[0]).join(', ');
+                issues.push(`🔴 FORGERY: Claims to be ${escHtml(brands)} but sent via ${escHtml(data.domain || '')} (general consumer provider)`);
+            } else if (saStatus === 'MISALIGNED') {
+                const brands = (sa.extracted_brands || []).map(b => b.split('.')[0]).join(', ');
+                issues.push(`Subject brand mismatch — "${escHtml(brands)}" referenced but sender is ${escHtml(data.domain || '')}`);
+            } else if (saStatus === 'IDENTITY_THEFT') {
+                issues.push('Identity theft attempt — security-alert subject from young/unverified domain');
+            } else if (saStatus === 'HIGH_RISK_BILLING') {
+                issues.push('Unverified billing — billing email from free or unverified provider');
+            }
+
+            // 4. Secondary header spoofing
+            if (ha.status === 'SECONDARY_HEADER_SPOOFING') {
+                const brands = (ha.spoofed_brands || []).join(', ');
+                const addrs  = (ha.flagged_addresses || []).join(', ');
+                issues.push(`Secondary header spoofing — ${brands} addresses used for social proof (${addrs})`);
+            }
+
+            // 5. Forensic DNA flags
+            (fd.forensic_flags || []).forEach(f => issues.push(f));
+
+            // 6. Hard Tier 1 check failures (structural)
+            (data.checks || []).forEach(c => {
+                if ((c.result === 'FAIL' || (c.result || '').startsWith('CRITICAL')) && c.name) {
+                    issues.push(`${c.name}: ${c.detail || c.result}`);
+                }
+            });
+
+            const isLegit = issues.length === 0;
+
+            if (isLegit) {
+                return `
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;
+                            border-radius:6px;background:rgba(0,255,136,0.10);
+                            border:1px solid #00ff8855;margin-bottom:14px;">
+                    <span style="font-size:1rem;font-weight:800;color:#00ff88;">✅ Legit Email</span>
+                    <span style="font-size:0.75rem;color:#3a9;margin-left:auto;">Trust Score: ${score}/100</span>
+                </div>`;
+            }
+
+            const items = issues.map(i =>
+                `<li style="margin:3px 0;font-size:0.82rem;color:#ffaaaa;line-height:1.45;">${escHtml(i)}</li>`
+            ).join('');
+
+            return `
+            <div style="padding:10px 16px;border-radius:6px;background:rgba(255,71,87,0.13);
+                        border:1px solid #ff475766;margin-bottom:14px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+                    <span style="font-size:1rem;font-weight:800;color:#ff4757;">🚫 Illegit Email</span>
+                    <span style="font-size:0.75rem;color:#ff6b6b;margin-left:auto;">Trust Score: ${score}/100</span>
+                </div>
+                <ul style="margin:0;padding-left:18px;">${items}</ul>
+            </div>`;
+        }
+
         function _dnsStatusBadge(status) {
             const map = {
                 LIVE:      ['#00ff88', 'rgba(0,255,136,0.12)',  'LIVE'],
@@ -3272,6 +3393,7 @@
         async function checkEmailDomain() {
             const input   = document.getElementById('domain-check-input').value.trim();
             const subject = (document.getElementById('subject_input')?.value || '').trim();
+            const cc_bcc  = (document.getElementById('cc_bcc_input')?.value  || '').trim();
             const resultEl = document.getElementById('domain-check-result');
             if (!input) {
                 resultEl.style.display = 'block';
@@ -3285,6 +3407,7 @@
             try {
                 const payload = { email: input };
                 if (subject) payload.subject = subject;
+                if (cc_bcc)  payload.cc_bcc  = cc_bcc;
                 const res = await fetch('/api/email_domain_check', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3336,21 +3459,49 @@
                 }).join('');
 
                 // ── Subject Alignment badge ──────────────────────────────────
+                // Only shown when a subject was actually analysed (brands extracted).
                 const sa = data.subject_alignment || null;
                 let alignmentBadge = '';
-                if (sa) {
+                const _hasBrands = sa && (sa.extracted_brands || []).length > 0;
+                if (_hasBrands) {
                     const aStatus = sa.alignment_status || 'AMBIGUOUS';
                     const aBadge  = sa.alignment_badge  || '🟡 Ambiguous';
-                    const aBg     = aStatus === 'ALIGNED'           ? 'rgba(0,255,136,0.10)'
-                                  : aStatus === 'AMBIGUOUS'         ? 'rgba(255,255,255,0.05)'
-                                  : 'rgba(255,71,87,0.12)';
-                    const aBorder = aStatus === 'ALIGNED'           ? '#00ff88'
-                                  : aStatus === 'AMBIGUOUS'         ? '#444'
-                                  : '#ff4757';
                     const aDetail = sa.detail || '';
-                    const aBrands = (sa.extracted_brands || [])
-                        .map(b => b.split('.')[0]).join(', ');
-                    alignmentBadge = `
+                    const aBrands = (sa.extracted_brands || []).map(b => b.split('.')[0]).join(', ');
+                    const isMisaligned = aStatus === 'MISALIGNED' || aStatus === 'IDENTITY_THEFT'
+                                      || aStatus === 'HIGH_RISK_BILLING'
+                                      || aStatus === 'BRAND_DISSONANCE';
+                    if (isMisaligned) {
+                        const tScore = data.trust_score ?? 0;
+                        const isDissonance = aStatus === 'BRAND_DISSONANCE';
+                        const dissonanceNote = isDissonance && aBrands
+                            ? `<div style="margin-top:6px;font-size:0.83rem;font-weight:600;color:#ff4757;">
+                                   🔴 FORGERY: Claims to be ${escHtml(aBrands)} but sent via ${escHtml(aStatus === 'BRAND_DISSONANCE' ? (data.domain || '') : '')} (general consumer provider)
+                               </div>` : '';
+                        alignmentBadge = `
+                        <div style="margin-top:12px;padding:10px 14px;border-radius:5px;
+                                    background:rgba(255,71,87,0.14);border:1px solid #ff475755;">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:${(aDetail || isDissonance) ? 5 : 0}px;">
+                                <span style="font-size:0.72rem;color:#ff4757;font-weight:700;
+                                             letter-spacing:0.06em;text-transform:uppercase;">
+                                    ⚠️ Alignment Status
+                                </span>
+                                <span style="font-size:0.88rem;font-weight:700;color:#ff4757;">
+                                    ${escHtml(aBadge)}
+                                </span>
+                                <span style="font-size:0.72rem;color:#ff6b6b;margin-left:auto;">
+                                    Trust Score: <strong>${tScore}</strong>/100
+                                </span>
+                            </div>
+                            ${dissonanceNote}
+                            ${aDetail ? `<div style="font-size:0.78rem;color:#ff9999;line-height:1.5;margin-top:4px;">${escHtml(aDetail)}</div>` : ''}
+                            ${!isDissonance && aBrands ? `<div style="margin-top:3px;font-size:0.72rem;color:#aa4444;">
+                                Brands detected: ${escHtml(aBrands)}</div>` : ''}
+                        </div>`;
+                    } else {
+                        const aBg     = aStatus === 'ALIGNED' ? 'rgba(0,255,136,0.10)' : 'rgba(255,255,255,0.05)';
+                        const aBorder = aStatus === 'ALIGNED' ? '#00ff88' : '#444';
+                        alignmentBadge = `
                         <div style="margin-top:10px;padding:8px 12px;border-radius:5px;
                                     background:${aBg};border:1px solid ${aBorder}30;">
                             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -3365,6 +3516,40 @@
                             </div>
                             ${aDetail ? `<div style="margin-top:4px;font-size:0.78rem;color:#888;
                                               line-height:1.5;">${escHtml(aDetail)}</div>` : ''}
+                        </div>`;
+                    }
+                }
+
+                // ── Header Integrity Audit ───────────────────────────────────
+                const ha = data.header_audit || null;
+                let headerAuditHtml = '';
+                if (ha) {
+                    const haStatus  = ha.status || 'CLEAN';
+                    const haBadge   = ha.header_audit_badge || '🟢 CLEAN';
+                    const haDetail  = ha.detail || '';
+                    const haFlagged = (ha.flagged_addresses || []).join(', ');
+                    const isSpoofed = haStatus === 'SECONDARY_HEADER_SPOOFING';
+                    const haBg      = isSpoofed ? 'rgba(255,71,87,0.14)' : 'rgba(0,255,136,0.07)';
+                    const haBorder  = isSpoofed ? '#ff4757' : '#00ff88';
+                    headerAuditHtml = `
+                        <div style="margin-top:12px;padding:9px 14px;border-radius:5px;
+                                    background:${haBg};border:1px solid ${haBorder}44;">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+                                        margin-bottom:${haDetail ? 5 : 0}px;">
+                                <span style="font-size:0.72rem;color:${isSpoofed ? '#ff4757' : '#555'};
+                                             font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">
+                                    ${isSpoofed ? '⚠️ ' : ''}Header Integrity Audit
+                                </span>
+                                <span style="font-size:0.85rem;font-weight:700;color:${haBorder};">
+                                    ${escHtml(haBadge)}
+                                </span>
+                                ${isSpoofed ? `<span style="font-size:0.72rem;color:#ff6b6b;margin-left:auto;">
+                                    Trust Score: <strong>0</strong>/100</span>` : ''}
+                            </div>
+                            ${haDetail ? `<div style="font-size:0.78rem;color:${isSpoofed ? '#ff9999' : '#888'};
+                                              line-height:1.5;">${escHtml(haDetail)}</div>` : ''}
+                            ${haFlagged ? `<div style="margin-top:3px;font-size:0.72rem;color:#aa4444;">
+                                Flagged: ${escHtml(haFlagged)}</div>` : ''}
                         </div>`;
                 }
 
@@ -3421,6 +3606,7 @@
                 resultEl.innerHTML = `
                     <div style="border-left:4px solid ${verdictBorder};background:${verdictBg};
                                 border-radius:6px;padding:16px 20px;">
+                        ${_buildEmailStatus(data)}
                         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
                             <span style="font-size:1.3rem;">${verdictIcon}</span>
                             <span style="font-size:1.05rem;font-weight:700;color:${verdictColor};">
@@ -3435,6 +3621,7 @@
                         ${matchedLine}
                         ${dnsDetailLine}
                         ${alignmentBadge}
+                        ${headerAuditHtml}
                         ${isNonExistent
                             ? `<div style="margin-top:8px;font-size:0.8rem;color:#ff4757;">
                                    ⬆ Added to Blacklisted Squatters table below.
@@ -3468,6 +3655,7 @@
         async function runDomainInspect() {
             const input   = document.getElementById('domain-check-input').value.trim();
             const subject = (document.getElementById('subject_input')?.value || '').trim();
+            const cc_bcc  = (document.getElementById('cc_bcc_input')?.value  || '').trim();
             const panelEl = document.getElementById('deep-research-panel');
             if (!input) {
                 panelEl.style.display = 'block';
@@ -3481,12 +3669,13 @@
                     <span style="display:inline-block;width:14px;height:14px;border:2px solid #00d4ff;
                                  border-top-color:transparent;border-radius:50%;
                                  animation:spin 0.8s linear infinite;"></span>
-                    Running Tier 1 screener + Mino Tier 2 research (anchor · community · reputation · DNA${subject ? ' · subject alignment' : ''})…
+                    Running Tier 1 screener + Mino Tier 2 research (anchor · community · reputation · DNA${subject ? ' · subject alignment' : ''}${cc_bcc ? ' · header audit' : ''})…
                 </div>`;
 
             try {
                 const payload = { domain: input };
                 if (subject) payload.subject = subject;
+                if (cc_bcc)  payload.cc_bcc  = cc_bcc;
                 const res  = await fetch('/api/email_inspect', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -3607,22 +3796,26 @@
                 </div>`;
 
             // ── Alignment Status badge ───────────────────────────────────────
+            // Only rendered when a subject was analysed (brands extracted).
             const sa = data.subject_alignment || null;
             let alignmentSection = '';
-            if (sa) {
+            const _drHasBrands = sa && (sa.extracted_brands || []).length > 0;
+            if (_drHasBrands) {
                 const aStatus = sa.alignment_status || 'AMBIGUOUS';
                 const aBadge  = sa.alignment_badge  || '🟡 Ambiguous';
-                const aBg     = aStatus === 'ALIGNED'   ? 'rgba(0,255,136,0.08)'
-                              : aStatus === 'AMBIGUOUS' ? 'rgba(255,255,255,0.03)'
-                              : 'rgba(255,71,87,0.10)';
-                const aBorder = aStatus === 'ALIGNED'   ? '#00ff88'
-                              : aStatus === 'AMBIGUOUS' ? '#333'
-                              : '#ff4757';
+                const isMis   = aStatus === 'MISALIGNED' || aStatus === 'IDENTITY_THEFT'
+                              || aStatus === 'HIGH_RISK_BILLING' || aStatus === 'BRAND_DISSONANCE';
+                const aBg     = isMis                 ? 'rgba(255,71,87,0.12)'
+                              : aStatus === 'ALIGNED' ? 'rgba(0,255,136,0.08)'
+                              :                         'rgba(255,255,255,0.03)';
+                const aBorder = isMis                 ? '#ff4757'
+                              : aStatus === 'ALIGNED' ? '#00ff88'
+                              :                         '#333';
                 const aDetail = sa.detail || '';
                 const aBrands = (sa.extracted_brands || [])
                     .map(b => b.split('.')[0].replace(/^./, c => c.toUpperCase())).join(', ');
-                const saAnchor = sa.official_anchor || '';
-                const homoFlags = (sa.subject_homograph?.flags || []).join('; ');
+                const saAnchor   = sa.official_anchor || '';
+                const homoFlags  = (sa.subject_homograph?.flags || []).join('; ');
 
                 // Build signal rows for the accordion
                 const saRows = [
@@ -3645,7 +3838,36 @@
                         <td colspan="2" style="padding:7px 12px;font-size:0.78rem;color:#aaa;line-height:1.5;">${escHtml(aDetail)}</td></tr>` : '',
                 ].filter(Boolean).join('');
 
-                alignmentSection = `
+                if (isMis) {
+                    const isDis = aStatus === 'BRAND_DISSONANCE';
+                    const disLine = isDis && aBrands
+                        ? `<div style="font-size:0.88rem;font-weight:700;color:#ff4757;margin-bottom:6px;">
+                               🔴 FORGERY: Claims to be ${escHtml(aBrands)} but sent via ${escHtml(sa.official_anchor || data.domain || '')} (general consumer provider)
+                           </div>` : '';
+                    // Prominent warning banner appended to the report
+                    alignmentSection = `
+                    <div style="margin-bottom:14px;padding:12px 16px;border-radius:6px;
+                                background:${aBg};border:1px solid ${aBorder}55;">
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:${(aDetail || isDis) ? 6 : 0}px;">
+                            <span style="font-size:0.72rem;color:#ff4757;font-weight:700;
+                                         letter-spacing:0.07em;text-transform:uppercase;">
+                                ⚠️ Alignment Status
+                            </span>
+                            <span style="font-size:1rem;font-weight:700;color:#ff4757;">
+                                ${escHtml(aBadge)}
+                            </span>
+                            ${!isDis && aBrands ? `<span style="font-size:0.73rem;color:#aa4444;">
+                                brands: ${escHtml(aBrands)}</span>` : ''}
+                            <span style="font-size:0.72rem;color:#ff6b6b;margin-left:auto;">
+                                Trust Score: <strong>${score}</strong>/100
+                            </span>
+                        </div>
+                        ${disLine}
+                        ${aDetail ? `<div style="font-size:0.8rem;color:#ff9999;line-height:1.5;">
+                            ${escHtml(aDetail)}</div>` : ''}
+                    </div>`;
+                } else {
+                    alignmentSection = `
                     <div style="margin-bottom:14px;padding:12px 16px;border-radius:6px;
                                 background:${aBg};border:1px solid ${aBorder}40;">
                         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
@@ -3662,12 +3884,46 @@
                         ${aDetail ? `<div style="font-size:0.8rem;color:#999;line-height:1.5;">
                             ${escHtml(aDetail)}</div>` : ''}
                     </div>`;
+                }
 
                 // Inject into t2Accordions later via saAccordion variable
                 window._saRows = saRows;
-                window._saOpen = aStatus !== 'AMBIGUOUS';
+                window._saOpen = isMis || aStatus === 'ALIGNED';
             } else {
                 window._saRows = null;
+            }
+
+            // ── Header Integrity Audit section ───────────────────────────────
+            const ha2 = data.header_audit || null;
+            let headerAuditSection = '';
+            if (ha2) {
+                const haStatus2  = ha2.status || 'CLEAN';
+                const haBadge2   = ha2.header_audit_badge || '🟢 CLEAN';
+                const haDetail2  = ha2.detail || '';
+                const haFlagged2 = (ha2.flagged_addresses || []).join(', ');
+                const isSpoofed2 = haStatus2 === 'SECONDARY_HEADER_SPOOFING';
+                const haBg2      = isSpoofed2 ? 'rgba(255,71,87,0.12)' : 'rgba(0,255,136,0.07)';
+                const haBorder2  = isSpoofed2 ? '#ff4757' : '#00ff88';
+                headerAuditSection = `
+                    <div style="margin-bottom:14px;padding:12px 16px;border-radius:6px;
+                                background:${haBg2};border:1px solid ${haBorder2}44;">
+                        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+                                    margin-bottom:${haDetail2 ? 6 : 0}px;">
+                            <span style="font-size:0.72rem;color:${isSpoofed2 ? '#ff4757' : '#555'};
+                                         font-weight:700;letter-spacing:0.07em;text-transform:uppercase;">
+                                ${isSpoofed2 ? '⚠️ ' : ''}Header Integrity Audit
+                            </span>
+                            <span style="font-size:1rem;font-weight:700;color:${haBorder2};">
+                                ${escHtml(haBadge2)}
+                            </span>
+                            ${isSpoofed2 ? `<span style="font-size:0.72rem;color:#ff6b6b;margin-left:auto;">
+                                Trust Score: <strong>${score}</strong>/100</span>` : ''}
+                        </div>
+                        ${haDetail2 ? `<div style="font-size:0.8rem;color:${isSpoofed2 ? '#ff9999' : '#999'};
+                            line-height:1.5;">${escHtml(haDetail2)}</div>` : ''}
+                        ${haFlagged2 ? `<div style="margin-top:4px;font-size:0.72rem;color:#aa4444;">
+                            Flagged: ${escHtml(haFlagged2)}</div>` : ''}
+                    </div>`;
             }
 
             // ── Verdict badge ────────────────────────────────────────────────
@@ -3856,8 +4112,10 @@
             return `
                 <div style="border-left:4px solid ${borderCol};background:${bgCol};
                             border-radius:6px;padding:18px 22px;">
+                    ${_buildEmailStatus(data)}
                     ${verdictRow}
                     ${alignmentSection}
+                    ${headerAuditSection}
                     ${trustMeter}
                     ${domainCards}
                     ${reasoningBox}
@@ -3916,133 +4174,90 @@
             }
         }
 
-        // ── Verify Identity pipeline ──────────────────────────────────────────
-        async function verifyIdentity() {
-            const input   = document.getElementById('domain-check-input').value.trim();
-            const subject = (document.getElementById('subject_input')?.value || '').trim();
-            const panelEl = document.getElementById('verify-identity-panel');
-            // Hide other panels so result is unambiguous
-            document.getElementById('domain-check-result').style.display = 'none';
-            document.getElementById('deep-research-panel').style.display  = 'none';
-            if (!input) {
-                panelEl.style.display = 'block';
-                panelEl.innerHTML = '<p style="color:#ffab00;">Please enter an email address or domain.</p>';
-                return;
-            }
+        // ── Mino Live Incidents ───────────────────────────────────────────────
+        let _incidentHighWaterMark = 0;   // track highest id seen for new-alert pulse
 
-            panelEl.style.display = 'block';
-            panelEl.innerHTML = `
-                <div style="color:#777;font-size:0.85rem;padding:16px 0;display:flex;align-items:center;gap:10px;">
-                    <span style="display:inline-block;width:14px;height:14px;border:2px solid #a78bfa;
-                                 border-top-color:transparent;border-radius:50%;
-                                 animation:spin 0.8s linear infinite;"></span>
-                    Running Identity Verification Gate (DNS → structural → auth${subject ? ' → subject alignment' : ''} → verdict)…
-                </div>`;
-
+        async function loadLiveIncidents() {
             try {
-                const payload = { email: input };
-                if (subject) payload.subject = subject;
-                const res  = await fetch('/api/verify_identity', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                    panelEl.innerHTML = `<p style="color:#ff4757;">Error: ${escHtml(data.error || 'unknown')}</p>`;
+                const data = await fetchJSON('/api/live_incidents');
+                const incidents = (data.incidents || []);
+
+                const tbody   = document.getElementById('incidents-tbody');
+                const tableEl = document.getElementById('incidents-table');
+                const emptyEl = document.getElementById('incidents-empty');
+                const countEl = document.getElementById('incidents-count');
+                const pulseEl = document.getElementById('incidents-pulse');
+                if (!tbody) return;
+
+                if (!incidents.length) {
+                    tableEl.style.display = 'none';
+                    emptyEl.style.display = '';
+                    countEl.textContent = '';
                     return;
                 }
-                panelEl.innerHTML = _renderVerifyResult(data);
+
+                // Count verdicts
+                const totals = { FORGERY: 0, SUSPICIOUS: 0, LEGIT: 0 };
+                incidents.forEach(i => { if (totals[i.mino_verdict] !== undefined) totals[i.mino_verdict]++; });
+                countEl.textContent =
+                    `${incidents.length} total · ${totals.FORGERY} forgery · ${totals.SUSPICIOUS} suspicious`;
+
+                // Pulse indicator — red if any FORGERY, orange if SUSPICIOUS, grey if all clean
+                const hasNew = incidents.length && incidents[0].id > _incidentHighWaterMark;
+                if (hasNew) _incidentHighWaterMark = incidents[0].id;
+                const pulseCol = totals.FORGERY   ? '#ff4757'
+                               : totals.SUSPICIOUS ? '#ffab00' : '#00ff88';
+                pulseEl.style.background = pulseCol;
+                if (hasNew && totals.FORGERY) {
+                    pulseEl.style.boxShadow = `0 0 6px ${pulseCol}`;
+                    setTimeout(() => { pulseEl.style.boxShadow = ''; }, 3000);
+                }
+
+                tableEl.style.display = '';
+                emptyEl.style.display = 'none';
+
+                tbody.innerHTML = incidents.slice(0, 50).map(inc => {
+                    const vCol = inc.mino_verdict === 'FORGERY'   ? '#ff4757'
+                               : inc.mino_verdict === 'SUSPICIOUS' ? '#ffab00' : '#00ff88';
+                    const vBg  = inc.mino_verdict === 'FORGERY'   ? 'rgba(255,71,87,0.12)'
+                               : inc.mino_verdict === 'SUSPICIOUS' ? 'rgba(255,171,0,0.10)'
+                               :                                     'rgba(0,255,136,0.08)';
+                    const vIcon = inc.mino_verdict === 'FORGERY'   ? '🚫'
+                                : inc.mino_verdict === 'SUSPICIOUS' ? '⚠️' : '✅';
+                    const isLegit   = inc.mino_verdict === 'LEGIT';
+                    const statusTxt = isLegit ? '✅ Legit' : '🚫 Illegit';
+                    const statusCol = isLegit ? '#00ff88' : '#ff4757';
+                    const statusBg  = isLegit ? 'rgba(0,255,136,0.10)' : 'rgba(255,71,87,0.14)';
+                    const flags = Array.isArray(inc.flags) ? inc.flags : [];
+                    const flagHtml = flags.length
+                        ? flags.map(f => `<span style="display:inline-block;margin:2px 4px 2px 0;
+                            padding:1px 6px;border-radius:3px;background:rgba(255,71,87,0.10);
+                            color:#ff9999;font-size:0.72rem;">${escHtml(f)}</span>`).join('')
+                        : '<span style="color:#444;font-size:0.78rem;">—</span>';
+                    const ts = inc.received_at
+                        ? new Date(inc.received_at).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
+                        : '—';
+                    return `<tr style="border-bottom:1px solid #1e1e1e;${inc.mino_verdict==='FORGERY'?'background:rgba(255,71,87,0.04);':''}">
+                        <td style="padding:8px 12px;font-size:0.75rem;color:#555;white-space:nowrap;">${escHtml(ts)}</td>
+                        <td style="padding:8px 12px;font-size:0.8rem;color:#ccc;word-break:break-all;max-width:180px;">${escHtml(inc.sender || '—')}</td>
+                        <td style="padding:8px 12px;font-size:0.78rem;color:#aaa;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                            title="${escHtml(inc.subject || '')}">${escHtml(inc.subject || '—')}</td>
+                        <td style="padding:8px 12px;">
+                            <span style="display:inline-block;padding:2px 8px;border-radius:3px;
+                                         background:${vBg};color:${vCol};font-size:0.75rem;
+                                         font-weight:700;white-space:nowrap;">${vIcon} ${escHtml(inc.mino_verdict)}</span>
+                        </td>
+                        <td style="padding:8px 12px;">
+                            <span style="display:inline-block;padding:2px 8px;border-radius:3px;
+                                         background:${statusBg};color:${statusCol};font-size:0.75rem;
+                                         font-weight:700;white-space:nowrap;">${statusTxt}</span>
+                        </td>
+                        <td style="padding:8px 12px;">${flagHtml}</td>
+                    </tr>`;
+                }).join('');
             } catch (err) {
-                panelEl.innerHTML = `<p style="color:#ff4757;">Request failed: ${escHtml(err.message)}</p>`;
+                console.error('loadLiveIncidents error:', err);
             }
-        }
-
-        function _renderVerifyResult(data) {
-            const passed  = data.passed;
-            const status  = data.status  || '';
-            const code    = data.code    || status;
-            const reason  = data.reason  || '';
-            const domain  = data.domain  || '';
-            const score   = data.trust_score ?? 0;
-            const checks  = Array.isArray(data.checks) ? data.checks : [];
-
-            // Status banner colour
-            const bannerColor = passed
-                ? (code === 'VERIFIED' ? '#00d4aa' : '#a0c4ff')
-                : '#ff4757';
-            const bannerLabel = passed
-                ? (code === 'VERIFIED' ? '✅ SUCCESS: VERIFIED' : '🟡 SUCCESS: AMBIGUOUS')
-                : `🚫 ${status}`;
-            const bannerBg = passed
-                ? (code === 'VERIFIED' ? 'rgba(0,212,170,0.12)' : 'rgba(160,196,255,0.10)')
-                : 'rgba(255,71,87,0.12)';
-
-            // Check step rows
-            const stepIcons = { PASS: '✅', FAIL: '❌', SKIP: '⏭️' };
-            const stepColors = { PASS: '#00d4aa', FAIL: '#ff4757', SKIP: '#555' };
-            const stepLabels = {
-                dns:        'DNS / Ghost Domain',
-                structural: 'Structural Integrity',
-                auth:       'SPF · DKIM · Envelope',
-                subject:    'Subject Alignment',
-            };
-
-            const checkRows = checks.map(c => {
-                const result = c.result || 'SKIP';
-                const icon   = stepIcons[result]  || '⬜';
-                const color  = stepColors[result] || '#888';
-                const label  = stepLabels[c.step] || c.step;
-                const detail = c.detail || c.reason || '';
-                return `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.06);">
-                    <td style="padding:9px 12px;font-size:0.85rem;white-space:nowrap;">${icon}</td>
-                    <td style="padding:9px 12px;font-size:0.85rem;color:#ccc;">${escHtml(label)}</td>
-                    <td style="padding:9px 12px;font-size:0.82rem;color:${color};font-weight:600;">${escHtml(result)}</td>
-                    <td style="padding:9px 12px;font-size:0.80rem;color:#888;">${escHtml(detail)}</td>
-                </tr>`;
-            }).join('');
-
-            const scoreBar = `
-                <div style="margin:6px 0 0;height:5px;border-radius:3px;background:rgba(255,255,255,0.08);overflow:hidden;">
-                    <div style="height:100%;width:${Math.min(100,Math.max(0,score))}%;
-                                background:${score>=70?'#00d4aa':score>=40?'#ffab00':'#ff4757'};
-                                border-radius:3px;transition:width 0.6s;"></div>
-                </div>`;
-
-            return `
-            <div style="border:1px solid rgba(255,255,255,0.10);border-radius:8px;overflow:hidden;">
-                <!-- Banner -->
-                <div style="background:${bannerBg};border-bottom:1px solid rgba(255,255,255,0.08);
-                             padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-                    <span style="font-size:1.05rem;font-weight:700;color:${bannerColor};">${bannerLabel}</span>
-                    <span style="font-size:0.82rem;color:#777;">${escHtml(domain)}</span>
-                </div>
-                <!-- Reason -->
-                <div style="padding:10px 18px;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(255,255,255,0.06);">
-                    <span style="font-size:0.85rem;color:#bbb;">${escHtml(reason)}</span>
-                </div>
-                <!-- Trust score -->
-                <div style="padding:10px 18px 14px;border-bottom:1px solid rgba(255,255,255,0.06);">
-                    <span style="font-size:0.78rem;color:#555;">Trust score: </span>
-                    <span style="font-size:0.85rem;color:${score>=70?'#00d4aa':score>=40?'#ffab00':'#ff4757'};font-weight:600;">${score}/100</span>
-                    ${scoreBar}
-                </div>
-                <!-- Check steps table -->
-                <div style="padding:0;">
-                    <table style="width:100%;border-collapse:collapse;">
-                        <thead>
-                            <tr style="background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.10);">
-                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;width:30px;"></th>
-                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;">Check</th>
-                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;">Result</th>
-                                <th style="padding:8px 12px;text-align:left;font-size:0.75rem;color:#555;">Detail</th>
-                            </tr>
-                        </thead>
-                        <tbody>${checkRows || '<tr><td colspan="4" style="padding:12px;color:#555;text-align:center;">No check data</td></tr>'}</tbody>
-                    </table>
-                </div>
-            </div>`;
         }
 
         async function removeSquatter(idx) {
@@ -4064,12 +4279,14 @@
         initChart();
         refreshData();
         refreshFirewallWidget();
-        loadLlmTheft();   // populate theft widget on home dashboard
+        loadLlmTheft();        // populate theft widget on home dashboard
+        loadLiveIncidents();   // populate Mino live incidents widget on load
 
         // Auto-refresh every 60 seconds
         setInterval(refreshData, 60000);
         setInterval(refreshFirewallWidget, 60000);
-        setInterval(loadLlmTheft, 15000);  // poll theft status every 15s for fast FAIL updates
+        setInterval(loadLlmTheft, 15000);        // poll theft status every 15s for fast FAIL updates
+        setInterval(loadLiveIncidents, 15000);   // poll live incidents every 15s
         setInterval(loadFingerprinting, 60 * 60 * 1000);  // fingerprinting: every 60 minutes
     </script>
 </body>
