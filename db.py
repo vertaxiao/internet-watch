@@ -1,4 +1,5 @@
 """SQLite database layer for NetWatch."""
+from __future__ import annotations
 
 import sqlite3
 import os
@@ -32,7 +33,34 @@ def init_db():
             );
 
             CREATE INDEX IF NOT EXISTS idx_snapshots_taken_at ON snapshots(taken_at);
+
+            CREATE TABLE IF NOT EXISTS netwatch_live_incidents (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                received_at TEXT    NOT NULL,
+                sender      TEXT    NOT NULL,
+                subject     TEXT    DEFAULT '',
+                domain      TEXT    NOT NULL,
+                mino_verdict TEXT   NOT NULL,   -- LEGIT | SUSPICIOUS | FORGERY
+                trust_score INTEGER NOT NULL DEFAULT 0,
+                verdict_detail TEXT DEFAULT '',
+                flags       TEXT    DEFAULT '[]',  -- JSON array of flag strings
+                raw_result  TEXT    DEFAULT '{}'   -- full inspect() result JSON
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_incidents_received_at
+                ON netwatch_live_incidents(received_at);
         """)
+        # Migration: add source_ref column to existing DBs that predate this schema
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(netwatch_live_incidents)").fetchall()}
+        if "source_ref" not in cols:
+            conn.execute("ALTER TABLE netwatch_live_incidents ADD COLUMN source_ref TEXT DEFAULT ''")
+        try:
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_incidents_source_ref "
+                "ON netwatch_live_incidents(source_ref) WHERE source_ref != ''"
+            )
+        except Exception:
+            pass
 
 
 def upsert_devices(devices: list[dict]):
@@ -197,6 +225,58 @@ def cleanup_fake_devices() -> None:
         conn.execute("DELETE FROM devices WHERE mac = '00:00:00:00:00:00'")
         # Delete multicast MACs (01:00:5E:xx:xx:xx)
         conn.execute("DELETE FROM devices WHERE mac LIKE '01:00:5E:%'")
+
+
+# ── Live Incidents (webhook-ingested emails) ──────────────────────────────────
+
+def store_live_incident(
+    sender: str,
+    subject: str,
+    domain: str,
+    mino_verdict: str,
+    trust_score: int,
+    verdict_detail: str,
+    flags: list,
+    raw_result: dict,
+    received_at: str = "",
+    source_ref: str = "",
+) -> int:
+    """Insert a new live incident row; return its id (0 if skipped as duplicate)."""
+    import json as _json
+    ts = received_at or datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT OR IGNORE INTO netwatch_live_incidents
+               (received_at, sender, subject, domain, mino_verdict,
+                trust_score, verdict_detail, flags, raw_result, source_ref)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (ts, sender, subject, domain, mino_verdict,
+             trust_score, verdict_detail,
+             _json.dumps(flags), _json.dumps(raw_result), source_ref),
+        )
+    return cur.lastrowid or 0
+
+
+def get_live_incidents(limit: int = 100) -> list[dict]:
+    """Return the most recent incidents, newest first."""
+    import json as _json
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT id, received_at, sender, subject, domain, mino_verdict,
+                      trust_score, verdict_detail, flags
+               FROM netwatch_live_incidents
+               ORDER BY received_at DESC, id DESC LIMIT ?""",
+            (limit,),
+        ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["flags"] = _json.loads(d["flags"] or "[]")
+        except Exception:
+            d["flags"] = []
+        result.append(d)
+    return result
 
 
 def get_stats() -> dict:

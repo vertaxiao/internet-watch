@@ -23,6 +23,13 @@ import dns.exception
 import sys as _sys
 _sys.path.insert(0, str(Path(__file__).parent))
 from email_inspector import inspect as _ei_inspect, verify_identity as _ei_verify   # noqa: E402
+from db import init_db, store_live_incident, get_live_incidents                     # noqa: E402
+
+# Ensure DB tables exist (runs at import time so launchd service gets it too)
+try:
+    init_db()
+except Exception as _dbe:
+    print(f"[netwatch] DB init warning: {_dbe}")
 
 app = Flask(__name__)
 
@@ -1227,9 +1234,10 @@ def email_domain_check():
 
     tier1_only = bool(body.get("tier1_only", False))
     subject    = body.get("subject", "").strip()
+    cc_bcc     = body.get("cc_bcc", "").strip()
     try:
         result = _ei_inspect(raw_input, realtime=True,
-                             run_tier2=not tier1_only, subject=subject)
+                             run_tier2=not tier1_only, subject=subject, cc_bcc=cc_bcc)
     except Exception as exc:
         # Fallback to legacy _check_domain on unexpected error
         result = _check_domain(domain)
@@ -1257,8 +1265,9 @@ def email_inspect_deep():
     if not domain or "." not in domain:
         return jsonify({"error": "invalid domain"}), 400
     subject = body.get("subject", "").strip()
+    cc_bcc  = body.get("cc_bcc", "").strip()
     try:
-        result = _ei_inspect(raw, realtime=True, run_tier2=True, subject=subject)
+        result = _ei_inspect(raw, realtime=True, run_tier2=True, subject=subject, cc_bcc=cc_bcc)
         return jsonify(result), 200
     except Exception as exc:
         # str(TimeoutError()) and str(CancelledError()) are '' — always give a message
@@ -1289,6 +1298,281 @@ def verify_identity_endpoint():
     except Exception as exc:
         msg = str(exc) or f"{type(exc).__name__} (no message)"
         return jsonify({"error": msg, "domain": domain}), 500
+
+
+# ── Mino verdict classifier ───────────────────────────────────────────────────
+
+def _classify_mino_verdict(result: dict) -> tuple[str, list[str]]:
+    """
+    Map an inspect() result to one of three Mino verdicts:
+      FORGERY    — definitive impersonation / infrastructure attack
+      SUSPICIOUS — signals present but not conclusive
+      LEGIT      — clean
+
+    Returns (mino_verdict, flags_list).
+    """
+    verdict = (result.get("verdict") or "").upper()
+    score   = result.get("trust_score", 50)
+    sa      = result.get("subject_alignment") or {}
+    ha      = result.get("header_audit")      or {}
+    t2      = result.get("tier2")             or {}
+    flags: list[str] = []
+
+    # ── FORGERY criteria ──────────────────────────────────────────────────────
+    # 1. Brand Dissonance
+    if sa.get("alignment_status") == "BRAND_DISSONANCE":
+        brands = ", ".join(
+            b.split(".")[0].title()
+            for b in (sa.get("extracted_brands") or [])[:2]
+        )
+        flags.append(f"Brand Dissonance — {brands or 'corporate brand'} claimed via consumer inbox")
+
+    # 2. Header Ghosting
+    if ha.get("status") == "SECONDARY_HEADER_SPOOFING":
+        addrs = ", ".join((ha.get("flagged_addresses") or [])[:2])
+        flags.append(f"Header Ghosting — {addrs}")
+
+    # 3. Infrastructure Failure: domain < 48 hours old
+    reg      = (t2.get("ownership") or {}).get("registration") or {}
+    age_days = reg.get("age_days")
+    if age_days is not None and 0 <= age_days < 2:
+        flags.append(f"Infrastructure Failure — domain registered {age_days:.1f} days ago (< 48 h)")
+
+    # 4. Hard verdict keywords
+    _forgery_kw = ("CRITICAL", "FORGERY", "GHOST", "BEC",
+                   "SPOOFING", "DISSONANCE", "NON-EXISTENT")
+    if any(kw in verdict for kw in _forgery_kw):
+        if not flags:
+            flags.append(result.get("verdict", verdict))
+        return "FORGERY", flags
+
+    if flags:
+        return "FORGERY", flags
+
+    # ── SUSPICIOUS criteria ───────────────────────────────────────────────────
+    sus_flags: list[str] = []
+    if score < 50:
+        sus_flags.append(f"Low trust score ({score}/100)")
+    sa_status = sa.get("alignment_status", "")
+    if sa_status == "MISALIGNED":
+        sus_flags.append("Subject-domain mismatch")
+    elif sa_status == "IDENTITY_THEFT":
+        sus_flags.append("Identity theft attempt")
+    elif sa_status == "HIGH_RISK_BILLING":
+        sus_flags.append("Unverified billing domain")
+    if "SUSPICIOUS" in verdict:
+        sus_flags.append(result.get("verdict", ""))
+
+    if sus_flags:
+        return "SUSPICIOUS", sus_flags
+
+    return "LEGIT", []
+
+
+# ── Historical backfill from local email scan files ───────────────────────────
+
+def _verdict_from_scan_result(r: dict) -> tuple[str, int, str, list[str]]:
+    """
+    Convert a scan-file result dict into (mino_verdict, trust_score, detail, flags)
+    without re-running the full inspect() pipeline.
+    """
+    risk_level    = (r.get("risk_level") or "LOW").upper()
+    primary_type  = (r.get("primary_type") or "").upper()
+    risk_score    = int(r.get("risk_score") or 0)
+    classifications = r.get("classifications") or []
+
+    # Map risk_score (0-10 scale) to trust_score (0-100 scale, inverted)
+    trust_score = max(0, 100 - risk_score * 10)
+
+    flags: list[str] = []
+    for c in classifications:
+        ctype   = (c.get("type") or "").upper()
+        detail  = c.get("detail") or ""
+        conf    = c.get("confidence", 0)
+        if ctype and conf > 0.3:
+            flags.append(f"{ctype}: {detail}" if detail else ctype)
+
+    if primary_type in ("FORGERY", "PHISHING", "IMPERSONATION", "SPOOFING"):
+        mino_verdict = "FORGERY"
+        if not flags:
+            flags.append(primary_type)
+    elif risk_level in ("HIGH", "CRITICAL") or trust_score < 40:
+        mino_verdict = "SUSPICIOUS"
+        if not flags:
+            flags.append(f"Risk level: {risk_level}")
+    elif risk_level == "MEDIUM" or trust_score < 60:
+        mino_verdict = "SUSPICIOUS"
+    else:
+        mino_verdict = "LEGIT"
+
+    detail = primary_type or risk_level
+    return mino_verdict, trust_score, detail, flags
+
+
+def _backfill_historical_incidents() -> None:
+    """
+    Populate netwatch_live_incidents from existing email_scans/*.json files.
+    Uses source_ref = "scan:<message_id>" to skip already-imported rows.
+    Runs once at startup in a background thread; safe to re-run (idempotent).
+    """
+    import glob as _glob
+    from datetime import timedelta
+
+    scan_dir   = Path(__file__).parent / "email_scans"
+    cutoff     = datetime.now() - timedelta(days=92)   # ~3 months
+    scan_files = sorted(_glob.glob(str(scan_dir / "scan_*.json")))
+
+    imported = skipped = 0
+    for fpath in scan_files:
+        # Filename: scan_YYYYMMDD_HHMMSS.json — skip files older than cutoff
+        fname = Path(fpath).stem  # e.g. scan_20260318_103052
+        try:
+            file_date = datetime.strptime(fname, "scan_%Y%m%d_%H%M%S")
+        except ValueError:
+            continue
+        if file_date < cutoff:
+            continue
+
+        try:
+            with open(fpath) as fh:
+                data = json.load(fh)
+        except Exception:
+            continue
+
+        for r in (data.get("results") or []):
+            sender      = (r.get("sender") or "").strip()
+            subject     = (r.get("subject") or "").strip()
+            message_id  = r.get("message_id") or ""
+            file_stem   = Path(fpath).stem
+            # Include filename so per-file sequential IDs don't collide across scans
+            source_ref  = f"scan:{file_stem}:{message_id}" if message_id else f"scan:{file_stem}:{sender}:{subject[:40]}"
+
+            if not sender:
+                continue
+
+            # Extract domain from sender string like "Name <addr@domain.com>"
+            m = re.search(r"@([\w.\-]+)", sender)
+            domain = m.group(1).lower() if m else sender
+
+            # Use received_date if present, else fall back to timestamp or file date
+            received_at = (
+                r.get("received_date")
+                or r.get("timestamp")
+                or file_date.isoformat()
+            )
+
+            mino_verdict, trust_score, detail, flags = _verdict_from_scan_result(r)
+
+            row_id = store_live_incident(
+                sender       = sender,
+                subject      = subject,
+                domain       = domain,
+                mino_verdict = mino_verdict,
+                trust_score  = trust_score,
+                verdict_detail = detail,
+                flags        = flags,
+                raw_result   = {
+                    "source": "scan_file",
+                    "risk_level":   r.get("risk_level"),
+                    "primary_type": r.get("primary_type"),
+                    "risk_score":   r.get("risk_score"),
+                },
+                received_at  = received_at,
+                source_ref   = source_ref,
+            )
+            if row_id:
+                imported += 1
+            else:
+                skipped += 1
+
+    print(f"[netwatch] backfill complete — {imported} imported, {skipped} skipped (duplicates)")
+
+
+# Kick off backfill in background so it doesn't block server startup
+import threading as _threading
+_threading.Thread(target=_backfill_historical_incidents, daemon=True, name="backfill").start()
+
+
+# ── Webhook: incoming email from external source ──────────────────────────────
+
+@app.route("/api/webhook/incoming_email", methods=["POST"])
+def webhook_incoming_email():
+    """
+    Receive an inbound email payload and run the full Mino analysis pipeline.
+
+    Expected JSON body:
+      sender  (required) — e.g. "billing@fakepaypal.net"
+      subject (optional) — email subject line
+      to      (optional) — primary To address(es)
+      cc      (optional) — CC addresses
+      bcc     (optional) — BCC addresses
+
+    Returns the Mino verdict summary immediately; full result stored in DB.
+    """
+    body    = request.get_json(silent=True) or {}
+    sender  = (body.get("sender") or body.get("from") or "").strip()
+    subject = body.get("subject", "").strip()
+    to_addr = body.get("to",  "").strip()
+    cc      = body.get("cc",  "").strip()
+    bcc     = body.get("bcc", "").strip()
+
+    if not sender:
+        return jsonify({"error": "missing 'sender' field"}), 400
+
+    # Build combined header string for secondary brand scan
+    cc_bcc = ", ".join(filter(None, [to_addr, cc, bcc]))
+
+    # ── Phase 1 + Phase 2: full Mino pipeline ────────────────────────────────
+    try:
+        result = _ei_inspect(
+            sender,
+            realtime=True,
+            run_tier2=True,
+            subject=subject,
+            cc_bcc=cc_bcc,
+        )
+    except Exception as exc:
+        return jsonify({"error": str(exc) or type(exc).__name__}), 500
+
+    # ── Classify verdict ─────────────────────────────────────────────────────
+    mino_verdict, flags = _classify_mino_verdict(result)
+
+    # ── Persist to DB ────────────────────────────────────────────────────────
+    incident_id = store_live_incident(
+        sender        = sender,
+        subject       = subject,
+        domain        = result.get("domain", ""),
+        mino_verdict  = mino_verdict,
+        trust_score   = result.get("trust_score", 0),
+        verdict_detail= result.get("verdict", ""),
+        flags         = flags,
+        raw_result    = {k: result[k] for k in
+                         ("domain", "verdict", "trust_score", "tier1", "subject_alignment",
+                          "header_audit", "timestamp") if k in result},
+    )
+
+    return jsonify({
+        "incident_id":  incident_id,
+        "mino_verdict": mino_verdict,
+        "trust_score":  result.get("trust_score", 0),
+        "verdict":      result.get("verdict", ""),
+        "domain":       result.get("domain", ""),
+        "flags":        flags,
+        "sender":       sender,
+        "subject":      subject,
+    }), 200
+
+
+# ── Live Incidents feed ───────────────────────────────────────────────────────
+
+@app.route("/api/live_incidents")
+def live_incidents():
+    """Return the 100 most recent Mino-analysed incidents, newest first."""
+    try:
+        rows = get_live_incidents(limit=100)
+        return jsonify({"incidents": rows}), 200
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/squatters")
